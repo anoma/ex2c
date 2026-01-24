@@ -28,17 +28,46 @@ defmodule Ex2c do
 
   def compile_label({module, function, arity}), do: Atom.to_string(function)
 
-  def compile_operand({:integer, val}), do: {:literal_expr, val}
+  def compile_literal([]), do: {:call_expr, {:symbol_expr, "make_nil"}, []}
 
-  def compile_operand(name = nil), do: {:symbol_expr, Atom.to_string(name)}
+  def compile_literal([head | tail]), do: {:call_expr, {:symbol_expr, "make_list"}, [compile_literal(head), compile_literal(tail)]}
 
-  def compile_operand({:atom, name}), do: {:symbol_expr, Atom.to_string(name)}
+  def compile_literal(tuple) when is_tuple(tuple), do: {:call_expr, {:symbol_expr, "make_tuple"}, [{:literal_expr, tuple_size(tuple)}, {:compound_literal_expr, "struct term []", Enum.map(Tuple.to_list(tuple), fn x -> {:expr_initializer, Ex2c.compile_literal(x)} end)}]}
+
+  def compile_literal(nil), do: {:call_expr, {:symbol_expr, "make_atom"}, [{:literal_expr, 3}, {:literal_expr, "nil"}]}
+
+  def compile_literal(atom) when is_atom(atom) do
+    atom_string = to_string(atom)
+    {:call_expr, {:symbol_expr, "make_atom"}, [{:literal_expr, String.length(atom_string)}, {:literal_expr, atom_string}]}
+  end
+
+  def compile_literal(val) when is_number(val), do: {:call_expr, {:symbol_expr, "make_small"}, [{:literal_expr, val}]}
+
+  def compile_literal(val), do: {:literal_expr, 0}
+
+  def compile_operand({:integer, val}), do: {:call_expr, {:symbol_expr, "make_small"}, [{:literal_expr, val}]}
+
+  def compile_operand(nil), do: compile_literal([])
+
+  def compile_operand({:atom, name}), do: compile_literal(name)
 
   def compile_operand({:x, reg}), do: {:symbol_expr, "x#{reg}"}
 
   def compile_operand({:y, slot}), do: {:subscript_expr, {:symbol_expr, "E"}, {:literal_expr, slot + 1}}
 
+  def compile_operand({:literal, literal}), do: compile_literal(literal)
+
+  def compile_operand({:tr, val, type}), do: compile_operand(val)
+
   def compile_operand(_), do: {:literal_expr, 0}
+
+  def compile_code(code = {:select_val, selector, fail, {:list, []}}), do: [{:goto_stmt, compile_label(fail)}]
+
+  def compile_code(code = {:select_val, selector, fail, {:list, [value, label | rest]}}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:if_stmt, {:call_expr, {:symbol_expr, "equal_terms"}, [compile_operand(selector), compile_operand(value)]},
+      [{:goto_stmt, compile_label(label)}], compile_code({:select_val, selector, fail, {:list, rest}})}]
+  end
 
   def compile_code(code = {:jump, label}) do
     [{:comment_stmt, Kernel.inspect(code)}, {:goto_stmt, compile_label(label)}]
@@ -107,6 +136,24 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, {:binary_expr, :=, {:symbol_expr, "x0"}, ccall}}]
   end
 
+  def compile_code(code = {:gc_bif, :-, label, live, arguments, reg}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_sub"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+      [{:goto_stmt, compile_label(label)}], []}]
+  end
+
+  def compile_code(code = {:gc_bif, :*, label, live, arguments, reg}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_mul"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+      [{:goto_stmt, compile_label(label)}], []}]
+  end
+
+  def compile_code(code = {:gc_bif, :+, label, live, arguments, reg}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_add"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+      [{:goto_stmt, compile_label(label)}], []}]
+  end
+
   def compile_code(code = :return) do
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, {:symbol_expr, "x0"}}]
   end
@@ -119,13 +166,13 @@ defmodule Ex2c do
     cparams =
       for idx <- 0..(arity-1)//1,
           do:
-            {"uintptr_t",
+            {"struct term",
              {:identifier_declarator, "x#{idx}"}}
 
     cfunc_decl =
       {:function_declarator,
        {:identifier_declarator, Atom.to_string(name)}, cparams}
-    cfunc_type = {:type_name, "uintptr_t", cfunc_decl}
+    cfunc_type = {:type_name, "struct term", cfunc_decl}
     cfunc_body = Enum.flat_map(code, &Ex2c.compile_code/1)
     {:function_stmt, specifier(cfunc_type), cfunc_decl, cfunc_body}
   end
@@ -187,6 +234,35 @@ defmodule Ex2c do
     str <> ")"
   end
 
+  def cexpr_to_string({:compound_literal_expr, type, initializer_list}) do
+    "(" <> type <> ") " <> cinitialization_to_string({:initializer_list_initializer, initializer_list})
+  end
+
+  # Convert C initialization to string
+
+  def cinitialization_to_string({:expr_initializer, expr}), do: cexpr_to_string(expr)
+
+  def cinitialization_to_string({:initializer_list_initializer, []}), do: "{}"
+
+  def cinitialization_to_string({:initializer_list_initializer, [init0 | rest]}) do
+    str = "{" <> cinitialization_to_string(init0)
+
+    str =
+      for init <- rest, reduce: str do
+        str -> str <> ", " <> cinitialization_to_string(init)
+      end
+
+    str <> "}"
+  end
+
+  def cinitialization_to_string({:member_designator_initializer, designators, initializer}) do
+    str =
+      for des <- designators, reduce: "" do
+        str -> str <> "." <> des
+      end
+    str <> " = " <> cinitialization_to_string(initializer)
+  end
+
   # Convert C declaration to string
 
   def declarator_to_string({:identifier_declarator, ident})
@@ -226,6 +302,17 @@ defmodule Ex2c do
   def initializer_to_string(init), do: " = " <> cexpr_to_string(init)
 
   # Convert C statement to string
+
+  def stmt_to_string({:if_stmt, condition, cons, [{:comment_stmt, comment}, alt = {:if_stmt, _, _, _}]}) do
+    str = "if(" <> cexpr_to_string(condition) <> ") {\n"
+
+    str =
+      for stmt <- cons, reduce: str do
+        str -> str <> stmt_to_string(stmt)
+      end
+
+    str <> "} else " <> stmt_to_string(alt)
+  end
 
   def stmt_to_string({:if_stmt, condition, cons, alt}) do
     str = "if(" <> cexpr_to_string(condition) <> ") {\n"
