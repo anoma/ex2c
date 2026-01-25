@@ -206,6 +206,13 @@ defmodule Ex2c do
     ]
   end
 
+  def compile_code(code = {:trim, n, remaining}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:expr_stmt, {:binary_expr, :=, {:subscript_expr, {:symbol_expr, "E"}, {:literal_expr, n}}, {:subscript_expr, {:symbol_expr, "E"}, {:literal_expr, 0}}}},
+     {:expr_stmt, {:binary_expr, :"+=", {:symbol_expr, "E"}, {:literal_expr, n}}}
+    ]
+  end
+
   def compile_code(code) do
     [{:comment_stmt, Kernel.inspect(code)}]
   end
