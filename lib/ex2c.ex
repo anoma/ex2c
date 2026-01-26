@@ -5,19 +5,6 @@ defmodule Ex2c do
   Documentation for `Ex2c`.
   """
 
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> Ex2c.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
-
   # Extract the components of a type name
 
   def specifier({:type_name, spec, _}), do: spec
@@ -28,7 +15,7 @@ defmodule Ex2c do
 
   def compile_label({:f, index}), do: beam_label_to_c(index)
 
-  def compile_label({module, function, arity}), do: Atom.to_string(function)
+  def compile_label({module, function, arity}), do: String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "_"), ".", "_"), "/", "_")
 
   def compile_goto({:f, 0}), do: {:expr_stmt, {:call_expr, {:symbol_expr, "abort"}, []}}
 
@@ -72,9 +59,9 @@ defmodule Ex2c do
 
   def compile_operand({:literal, literal}), do: compile_literal(literal)
 
-  def compile_operand({:tr, val, type}), do: compile_operand(val)
+  def compile_operand({:tr, val, _type}), do: compile_operand(val)
 
-  def compile_code(code = {:select_val, selector, fail, {:list, []}}), do: [{:goto_stmt, compile_label(fail)}]
+  def compile_code(code = {:select_val, _selector, fail, {:list, []}}), do: [{:comment_stmt, Kernel.inspect(code)}, {:goto_stmt, compile_label(fail)}]
 
   def compile_code(code = {:select_val, selector, fail, {:list, [value, label | rest]}}) do
     [{:comment_stmt, Kernel.inspect(code)},
@@ -90,7 +77,7 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)}, {:label_stmt, beam_label_to_c(lbl)}]
   end
 
-  def compile_code(code = {:allocate, need_stack, live}) do
+  def compile_code(code = {:allocate, need_stack, _live}) do
     [{:comment_stmt, Kernel.inspect(code)}, {:expr_stmt, {:binary_expr, :"-=", {:symbol_expr, "E"}, {:literal_expr, need_stack + 1}}}]
   end
 
@@ -149,19 +136,19 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
   end
 
-  def compile_code(code = {:gc_bif, :-, label, live, arguments, reg}) do
+  def compile_code(code = {:gc_bif, :-, label, _live, arguments, reg}) do
     [{:comment_stmt, Kernel.inspect(code)},
      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_sub"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
       [compile_goto(label)], []}]
   end
 
-  def compile_code(code = {:gc_bif, :*, label, live, arguments, reg}) do
+  def compile_code(code = {:gc_bif, :*, label, _live, arguments, reg}) do
     [{:comment_stmt, Kernel.inspect(code)},
      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_mul"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
       [compile_goto(label)], []}]
   end
 
-  def compile_code(code = {:gc_bif, :+, label, live, arguments, reg}) do
+  def compile_code(code = {:gc_bif, :+, label, _live, arguments, reg}) do
     [{:comment_stmt, Kernel.inspect(code)},
      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_add"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
       [compile_goto(label)], []}]
@@ -171,7 +158,7 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, compile_operand({:x, 0})}]
   end
 
-  def compile_code(code = {:make_fun3, label, index, unique, dst, {:list, env}}) do
+  def compile_code(code = {:make_fun3, label, _index, _unique, dst, {:list, env}}) do
     cfunc_decl =
       {:function_declarator,
        {:pointer_declarator, {:identifier_declarator, ""}}, []}
@@ -193,7 +180,7 @@ defmodule Ex2c do
     env = {:member_access_expr, {:member_access_expr, {:symbol_expr, tmp}, "fun"}, "env"}
     ptr = {:member_access_expr, {:member_access_expr, {:symbol_expr, tmp}, "fun"}, "ptr"}
     cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
-    cparams =  for idx <- 0..(arity-1)//1, do: {"struct term", {:identifier_declarator, ""}}
+    cparams =  for _idx <- 0..(arity-1)//1, do: {"struct term", {:identifier_declarator, ""}}
     cfunc_decl =
       {:function_declarator,
        {:pointer_declarator, {:identifier_declarator, ""}}, cparams}
@@ -206,7 +193,7 @@ defmodule Ex2c do
     ]
   end
 
-  def compile_code(code = {:trim, n, remaining}) do
+  def compile_code(code = {:trim, n, _remaining}) do
     [{:comment_stmt, Kernel.inspect(code)},
      {:expr_stmt, {:binary_expr, :=, {:subscript_expr, {:symbol_expr, "E"}, {:literal_expr, n}}, {:subscript_expr, {:symbol_expr, "E"}, {:literal_expr, 0}}}},
      {:expr_stmt, {:binary_expr, :"+=", {:symbol_expr, "E"}, {:literal_expr, n}}}
@@ -217,7 +204,7 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)}]
   end
 
-  def compile_function({:function, name, arity, entry, code}) do
+  def compile_function(module, {:function, name, arity, entry, code}) do
     cparams =
       for idx <- 0..(arity-1)//1,
           do:
@@ -225,7 +212,7 @@ defmodule Ex2c do
              {:identifier_declarator, "x#{idx}"}}
     cfunc_decl =
       {:function_declarator,
-       {:identifier_declarator, Atom.to_string(name)}, cparams}
+       {:identifier_declarator, compile_label({module, name, arity})}, cparams}
     cfunc_type = {:type_name, "struct term", cfunc_decl}
     cfunc_prologue =
       for idx <- 0..(arity-1)//1,
@@ -236,11 +223,14 @@ defmodule Ex2c do
      {:function_stmt, specifier(cfunc_type), cfunc_decl, cfunc_prologue ++ cfunc_body}]
   end
 
-  def compile do
-    f = '/home/murisi/Documents/Heliax/Elixir.Playground.beam'
-    {:ok, beam} = File.read(f)
-    {:beam_file, module, labeled_exports, attributes, compile_info, code} = :beam_disasm.file(beam)
-    IO.puts program_to_string(Enum.flat_map(code, &Ex2c.compile_function/1))
+  def compile_bytes(beam) do
+    {:beam_file, module, _labeled_exports, _attributes, _compile_info, code} = :beam_disasm.file(beam)
+    program_to_string(Enum.flat_map(code, fn x -> Ex2c.compile_function(module, x) end))
+  end
+
+  def compile_file(path) do
+    {:ok, beam} = File.read(path)
+    compile_bytes(beam)
   end
 
   # Convert C expression to string
@@ -371,7 +361,7 @@ defmodule Ex2c do
 
   # Convert C statement to string
 
-  def stmt_to_string({:if_stmt, condition, cons, [{:comment_stmt, comment}, alt = {:if_stmt, _, _, _}]}) do
+  def stmt_to_string({:if_stmt, condition, cons, [{:comment_stmt, _comment}, alt = {:if_stmt, _, _, _}]}) do
     str = "if(" <> cexpr_to_string(condition) <> ") {\n"
 
     str =
