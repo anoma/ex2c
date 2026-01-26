@@ -1,9 +1,9 @@
-use Bitwise
-
 defmodule Ex2c do
   @moduledoc """
   Documentation for `Ex2c`.
   """
+
+  import Bitwise
 
   # Extract the components of a type name
 
@@ -44,8 +44,6 @@ defmodule Ex2c do
     byte_array = {:compound_literal_expr, "unsigned char []", Enum.map(byte_list, fn x -> {:expr_initializer, {:literal_expr, x}} end)}
     {:call_expr, {:symbol_expr, "make_bitstring"}, [{:literal_expr, size}, byte_array]}
   end
-
-  def compile_literal(val), do: {:literal_expr, 0}
 
   def compile_operand({:integer, val}), do: {:call_expr, {:symbol_expr, "make_small"}, [{:literal_expr, val}]}
 
@@ -204,7 +202,7 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)}]
   end
 
-  def compile_function(module, {:function, name, arity, entry, code}) do
+  def compile_function({module, {:function, name, arity, entry, code}}, acc) do
     cparams =
       for idx <- 0..(arity-1)//1,
           do:
@@ -219,13 +217,14 @@ defmodule Ex2c do
           do:
             {:expr_stmt, {:binary_expr, :=, compile_operand({:x, idx}), {:symbol_expr, "x#{idx}"}}}
     cfunc_body = Enum.flat_map(code, &Ex2c.compile_code/1)
+    [{:declaration_stmt, "struct term", [{cfunc_decl, nil}]} | acc] ++
     [{:comment_stmt, Kernel.inspect({:function, name, arity, entry, []})},
      {:function_stmt, specifier(cfunc_type), cfunc_decl, cfunc_prologue ++ cfunc_body}]
   end
 
   def compile_bytes(beam) do
     {:beam_file, module, _labeled_exports, _attributes, _compile_info, code} = :beam_disasm.file(beam)
-    program_to_string(Enum.flat_map(code, fn x -> Ex2c.compile_function(module, x) end))
+    program_to_string(Enum.reduce(code, [], fn x, acc -> Ex2c.compile_function({module, x}, acc) end))
   end
 
   def compile_file(path) do
