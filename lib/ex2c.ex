@@ -142,6 +142,20 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
   end
 
+  def compile_code(code = {:call_ext, arity, label}) do
+    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, cargs}
+    [{:comment_stmt, Kernel.inspect(code)}, {:expr_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
+  end
+
+  def compile_code(code = {:call_last, arity, label, deallocate}) do
+    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, cargs}
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:expr_stmt, {:binary_expr, :"+=", {:symbol_expr, "E"}, {:literal_expr, deallocate + 1}}},
+     {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
+  end
+
   def compile_code(code = {:gc_bif, :-, label, _live, arguments, reg}) do
     [{:comment_stmt, Kernel.inspect(code)},
      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_sub"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
@@ -170,6 +184,17 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)},
      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_div"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
       [compile_goto(label)], []}]
+  end
+
+  def compile_code(code = {:gc_bif, :length, label, _live, arguments, reg}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_length"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+      [compile_goto(label)], []}]
+  end
+
+  def compile_code(code = {:init_yregs, {:list, regs}}) do
+    [{:comment_stmt, Kernel.inspect(code)} |
+     Enum.map(regs, fn x -> {:expr_stmt, {:binary_expr, :=, compile_operand(x), compile_operand(nil)}} end)]
   end
 
   def compile_code(code = {:swap, op1, op2}) do

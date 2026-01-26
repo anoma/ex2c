@@ -77,4 +77,47 @@ defmodule Ex2cTest do
     output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[Bezout])
     Logger.info(output)
   end
+
+  @doc """
+  Compilation produces a merge sort function in C which can be used as follows:
+  int main(int argc, char *argv[]) {
+  display(Elixir_MergeSort_sort_1(make_list(make_small(3), make_nil())));
+  // Expected output: [3]
+  display(Elixir_MergeSort_sort_1(make_list(make_small(3), make_list(make_small(2), make_nil()))));
+  // Expected output: [2, 3]
+  display(Elixir_MergeSort_sort_1(make_list(make_small(3), make_list(make_small(2), make_list(make_small(1), make_nil())))));
+  // Expected output: [1, 2, 3]
+  display(Elixir_MergeSort_sort_1(make_list(make_small(3), make_list(make_small(1), make_list(make_small(2), make_nil())))));
+  // Expected output: [1, 2, 3]
+  return 0;
+  }
+  """
+  test "compile the merge-sort function" do
+    quoted =
+      quote do
+        defmodule MergeSort do
+          # Extract slice from list
+          def slice(a, l, l), do: []
+          def slice([a | as], 0, u), do: [a | slice(as, 0, u-1)]
+          def slice([a | as], l, u), do: slice(as, l-1, u-1)
+          # Merge two ordered sequences
+          def merge(a, []), do: a
+          def merge([], b), do: b
+          def merge([a | as], bs = [b | _]) when a <= b, do: [a | merge(as, bs)]
+          def merge(as = [a | _], [b | bs]) when a > b, do: [b | merge(as, bs)]
+          # Base case 1
+          def sort([]), do: []
+          # Base case 2
+          def sort([x]), do: [x]
+          # Recursive case
+          def sort(a) do
+            len = Kernel.length(a)
+            half = Kernel.div(len, 2)
+            merge(sort(slice(a, 0, half)), sort(slice(a, half, len)))
+          end
+        end
+      end
+    output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[MergeSort])
+    Logger.info(output)
+  end
 end

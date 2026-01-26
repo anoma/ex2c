@@ -252,6 +252,11 @@ bool is_eq(struct term t, struct term u) {
   return is_eq_exact(t, u);
 }
 
+bool is_ge(struct term t, struct term u) {
+  if(t.type != u.type || t.type != SMALL) return false;
+  return t.small.value >= u.small.value;
+}
+
 bool bif_sub(struct term a, struct term b, struct term *c) {
   if(a.type != SMALL || b.type != SMALL) return false;
   c->type = SMALL;
@@ -281,6 +286,16 @@ bool bif_div(struct term a, struct term b, struct term *c) {
   if(a.type != SMALL || b.type != SMALL || b.small.value == 0) return false;
   c->type = SMALL;
   c->small.value = a.small.value / b.small.value;
+  return true;
+}
+
+int bif_length(struct term a, struct term *b) {
+  if(a.type != LIST) return false;
+  b->type = SMALL;
+  for(b->small.value = 0; a.type != NIL; b->small.value++) {
+    if(a.type != LIST) return false;
+    else a = *a.list.tail;
+  }
   return true;
 }
 
