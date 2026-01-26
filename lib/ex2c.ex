@@ -17,6 +17,8 @@ defmodule Ex2c do
 
   def compile_label({module, function, arity}), do: String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "_"), ".", "_"), "/", "_")
 
+  def compile_label({:extfunc, module, function, arity}), do: String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "_"), ".", "_"), "/", "_")
+
   def compile_goto({:f, 0}), do: {:expr_stmt, {:call_expr, {:symbol_expr, "abort"}, []}}
 
   def compile_goto(label), do: {:goto_stmt, compile_label(label)}
@@ -134,6 +136,12 @@ defmodule Ex2c do
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
   end
 
+  def compile_code(code = {:call_ext_only, arity, label}) do
+    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, cargs}
+    [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
+  end
+
   def compile_code(code = {:gc_bif, :-, label, _live, arguments, reg}) do
     [{:comment_stmt, Kernel.inspect(code)},
      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_sub"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
@@ -228,9 +236,11 @@ defmodule Ex2c do
     ]
   end
 
-  def compile_code(code) do
-    [{:comment_stmt, Kernel.inspect(code)}]
-  end
+  def compile_code(code = {:line, _number}), do: [{:comment_stmt, Kernel.inspect(code)}]
+
+  def compile_code(code = {:func_info, _module, _func, _arity}), do: [{:comment_stmt, Kernel.inspect(code)}]
+
+  def compile_code(code = {:test_heap, _need, _live}), do: [{:comment_stmt, Kernel.inspect(code)}]
 
   def compile_function({module, {:function, name, arity, entry, code}}, acc) do
     cparams =
@@ -254,7 +264,8 @@ defmodule Ex2c do
 
   def compile_bytes(beam) do
     {:beam_file, module, _labeled_exports, _attributes, _compile_info, code} = :beam_disasm.file(beam)
-    program_to_string(Enum.reduce(code, [], fn x, acc -> Ex2c.compile_function({module, x}, acc) end))
+    program_string = program_to_string(Enum.reduce(code, [], fn x, acc -> Ex2c.compile_function({module, x}, acc) end))
+    "#include \"ex2crt.h\"\n#{program_string}"
   end
 
   def compile_file(path) do

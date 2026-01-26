@@ -283,3 +283,11 @@ bool bif_div(struct term a, struct term b, struct term *c) {
   c->small.value = a.small.value / b.small.value;
   return true;
 }
+
+struct term erlang_get_module_info_1(struct term a) {
+  abort();
+}
+
+struct term erlang_get_module_info_2(struct term a, struct term b) {
+  abort();
+}
