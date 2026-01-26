@@ -158,12 +158,28 @@ defmodule Ex2c do
       [compile_goto(label)], []}]
   end
 
+  def compile_code(code = {:gc_bif, :div, label, _live, arguments, reg}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_div"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+      [compile_goto(label)], []}]
+  end
+
   def compile_code(code = {:swap, op1, op2}) do
     [{:comment_stmt, Kernel.inspect(code)},
      {:declaration_stmt, "struct term", [{{:identifier_declarator, "tmp"}, compile_operand(op1)}]},
      {:expr_stmt, {:binary_expr, :=, compile_operand(op1), compile_operand(op2)}},
      {:expr_stmt, {:binary_expr, :=, compile_operand(op2), {:symbol_expr, "tmp"}}}
     ]
+  end
+
+  def compile_code(code = {:get_tuple_element, src, idx, dst}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+    {:expr_stmt, {:binary_expr, :=, compile_operand(dst), {:subscript_expr, {:member_access_expr, {:member_access_expr, compile_operand(src), "tuple"}, "values"}, {:literal_expr, idx}}}}]
+  end
+
+  def compile_code(code = {:put_tuple2, dst, {:list, elts}}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:expr_stmt, {:binary_expr, :=, compile_operand(dst), {:call_expr, {:symbol_expr, "make_tuple"}, [{:literal_expr, length(elts)}, {:compound_literal_expr, "struct term []", Enum.map(elts, fn x -> {:expr_initializer, compile_operand(x)} end)}]}}}]
   end
 
   def compile_code(code = :return) do

@@ -276,3 +276,10 @@ bool bif_rem(struct term a, struct term b, struct term *c) {
   c->small.value = a.small.value % b.small.value;
   return true;
 }
+
+bool bif_div(struct term a, struct term b, struct term *c) {
+  if(a.type != SMALL || b.type != SMALL || b.small.value == 0) return false;
+  c->type = SMALL;
+  c->small.value = a.small.value / b.small.value;
+  return true;
+}
