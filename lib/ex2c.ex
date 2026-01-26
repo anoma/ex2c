@@ -152,6 +152,20 @@ defmodule Ex2c do
       [compile_goto(label)], []}]
   end
 
+  def compile_code(code = {:gc_bif, :rem, label, _live, arguments, reg}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_rem"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+      [compile_goto(label)], []}]
+  end
+
+  def compile_code(code = {:swap, op1, op2}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:declaration_stmt, "struct term", [{{:identifier_declarator, "tmp"}, compile_operand(op1)}]},
+     {:expr_stmt, {:binary_expr, :=, compile_operand(op1), compile_operand(op2)}},
+     {:expr_stmt, {:binary_expr, :=, compile_operand(op2), {:symbol_expr, "tmp"}}}
+    ]
+  end
+
   def compile_code(code = :return) do
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, compile_operand({:x, 0})}]
   end

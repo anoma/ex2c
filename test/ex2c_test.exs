@@ -16,4 +16,18 @@ defmodule Ex2cTest do
     output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[Factorial])
     Logger.info(output)
   end
+
+  test "compile the gcd function" do
+    quoted =
+      quote do
+        defmodule GCD do
+          # Base case
+          def gcd(a, 0), do: a
+          # Recursive case
+          def gcd(a, b), do: gcd(b, Kernel.rem(a, b))
+        end
+      end
+    output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[GCD])
+    Logger.info(output)
+  end
 end

@@ -255,20 +255,24 @@ bool is_eq(struct term t, struct term u) {
 bool bif_sub(struct term a, struct term b, struct term *c) {
   if(a.type != SMALL || b.type != SMALL) return false;
   c->type = SMALL;
-  c->small.value = a.small.value - b.small.value;
   return !__builtin_sub_overflow(a.small.value, b.small.value, &c->small.value);
 }
 
 bool bif_add(struct term a, struct term b, struct term *c) {
   if(a.type != SMALL || b.type != SMALL) return false;
   c->type = SMALL;
-  c->small.value = a.small.value + b.small.value;
   return !__builtin_add_overflow(a.small.value, b.small.value, &c->small.value);
 }
 
 bool bif_mul(struct term a, struct term b, struct term *c) {
   if(a.type != SMALL || b.type != SMALL) return false;
   c->type = SMALL;
-  c->small.value = a.small.value * b.small.value;
   return !__builtin_mul_overflow(a.small.value, b.small.value, &c->small.value);
+}
+
+bool bif_rem(struct term a, struct term b, struct term *c) {
+  if(a.type != SMALL || b.type != SMALL || b.small.value == 0) return false;
+  c->type = SMALL;
+  c->small.value = a.small.value % b.small.value;
+  return true;
 }
