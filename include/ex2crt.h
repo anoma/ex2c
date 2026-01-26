@@ -81,7 +81,7 @@ struct term make_tuple(uint32_t len, struct term *values) {
   struct term t;
   t.type = TUPLE;
   t.tuple.length = len;
-  t.tuple.values = calloc(len, sizeof(struct term));
+  t.tuple.values = (struct term *) calloc(len, sizeof(struct term));
   for(int i = 0; i < len; i++) {
     t.tuple.values[i] = values[i];
   }
@@ -91,9 +91,9 @@ struct term make_tuple(uint32_t len, struct term *values) {
 struct term make_list(struct term head, struct term tail) {
   struct term t;
   t.type = LIST;
-  t.list.head = malloc(sizeof(struct term));
+  t.list.head = (struct term *) malloc(sizeof(struct term));
   *t.list.head = head;
-  t.list.tail = malloc(sizeof(struct term));
+  t.list.tail = (struct term *) malloc(sizeof(struct term));
   *t.list.tail = tail;
   return t;
 } 
@@ -109,7 +109,7 @@ struct term make_fun(struct term (*ptr)(), uint32_t num_free, struct term *env) 
   t.type = FUN;
   t.fun.ptr = ptr;
   t.fun.num_free = num_free;
-  t.fun.env = calloc(num_free, sizeof(struct term));
+  t.fun.env = (struct term *) calloc(num_free, sizeof(struct term));
   for(int i = 0; i < num_free; i++) {
     t.fun.env[i] = env[i];
   }
@@ -136,23 +136,23 @@ int bit_to_byte_size(int length) {
   return (length + 7)/8;
 }
 
-void display(struct term *t) {
+void display_aux(struct term *t) {
   switch(t->type) {
     case NIL:
       printf("[]");
       break;
     case LIST:
       printf("[");
-      display(t->list.head);
+      display_aux(t->list.head);
       t = t->list.tail;
       while(t->type == LIST) {
         printf(", ");
-        display(t->list.head);
+        display_aux(t->list.head);
         t = t->list.tail;
       }
       if(t->type != NIL) {
         printf(" | ");
-        display(t);
+        display_aux(t);
       }
       printf("]");
       break;
@@ -160,13 +160,13 @@ void display(struct term *t) {
       printf("%i", t->small.value);
       break;
     case ATOM:
-      printf(t->atom.value);
+      printf("%s", t->atom.value);
       break;
     case TUPLE:
       printf("{");
       for(int i = 0; i < t->tuple.length; i++) {
         if(i) printf(", ");
-        display(&t->tuple.values[i]);
+        display_aux(&t->tuple.values[i]);
       }
       printf("}");
       break;
@@ -184,6 +184,11 @@ void display(struct term *t) {
       printf(">>");
       break;
   }
+}
+
+void display(struct term t) {
+  display_aux(&t);
+  printf("\n");
 }
 
 bool is_nonempty_list(struct term t) {
