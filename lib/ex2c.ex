@@ -61,6 +61,8 @@ defmodule Ex2c do
 
   def compile_operand({:tr, val, _type}), do: compile_operand(val)
 
+  def compile_operand(a) when is_integer(a), do: {:literal_expr, a}
+
   def compile_code(code = {:select_val, _selector, fail, {:list, []}}), do: [{:comment_stmt, Kernel.inspect(code)}, {:goto_stmt, compile_label(fail)}]
 
   def compile_code(code = {:select_val, selector, fail, {:list, [value, label | rest]}}) do

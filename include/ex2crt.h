@@ -191,6 +191,14 @@ void display(struct term t) {
   printf("\n");
 }
 
+bool is_tuple(struct term t) {
+  return t.type == TUPLE;
+}
+
+bool test_arity(struct term t, int len) {
+  return t.tuple.length == len;
+}
+
 bool is_nonempty_list(struct term t) {
   return t.type == LIST;
 }

@@ -120,4 +120,35 @@ defmodule Ex2cTest do
     output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[MergeSort])
     Logger.info(output)
   end
+
+  @doc """
+  Compilation produces zip and unzip functions in C which can be used as follows:
+  int main(int argc, char *argv[]) {
+  display(Elixir_Zip_zip_2(make_list(make_small(0), make_list(make_small(2), make_list(make_small(4), make_list(make_small(6), make_nil())))), make_list(make_small(1), make_list(make_small(3), make_list(make_small(5), make_nil())))));
+  // Expected output: [{0, 1}, {2, 3}, {4, 5}]
+  display(Elixir_Zip_unzip_1(make_list(make_tuple(2, (struct term []) { make_small(0), make_small(9) }), make_list(make_tuple(2, (struct term []) { make_small(1), make_small(8) }), make_list(make_tuple(2, (struct term []) { make_small(2), make_small(7) }), make_nil())))));
+  // Expected output: {[0, 1, 2], [9, 8, 7]}
+  return 0;
+  }
+  """
+  test "compile the zip vs unzip functions" do
+    quoted =
+      quote do
+        defmodule Zip do
+          # Base case
+          def zip(a, []), do: []
+          def zip([], b), do: []
+          # Recursive case
+          def zip([a | as], [b | bs]), do: [{a, b} | zip(as, bs)]
+          # Base case
+          def unzip([]), do: {[], []}
+          def unzip([{a, b} | abs]) do
+            {as, bs} = unzip(abs)
+            {[a | as], [b | bs]}
+          end
+        end
+      end
+    output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[Zip])
+    Logger.info(output)
+  end
 end
