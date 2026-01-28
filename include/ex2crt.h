@@ -130,6 +130,57 @@ struct term xs[128];
 struct term stack[128];
 struct term *E = stack + 128;
 
+// Foreign Function Interface
+
+struct term call_0(struct term (*fun)()) {
+  return fun();
+}
+
+struct term call_1(struct term (*fun)(), struct term x0) {
+  xs[0] = x0;
+  return call_0(fun);
+}
+
+struct term call_2(struct term (*fun)(), struct term x0, struct term x1) {
+  xs[1] = x1;
+  return call_1(fun, x0);
+}
+
+struct term call_3(struct term (*fun)(), struct term x0, struct term x1, struct term x2) {
+  xs[2] = x2;
+  return call_2(fun, x0, x1);
+}
+
+struct term call_4(struct term (*fun)(), struct term x0, struct term x1, struct term x2, struct term x3) {
+  xs[3] = x3;
+  return call_3(fun, x0, x1, x2);
+}
+
+struct term call_5(struct term (*fun)(), struct term x0, struct term x1, struct term x2, struct term x3, struct term x4) {
+  xs[4] = x4;
+  return call_4(fun, x0, x1, x2, x3);
+}
+
+struct term call_6(struct term (*fun)(), struct term x0, struct term x1, struct term x2, struct term x3, struct term x4, struct term x5) {
+  xs[5] = x5;
+  return call_5(fun, x0, x1, x2, x3, x4);
+}
+
+struct term call_7(struct term (*fun)(), struct term x0, struct term x1, struct term x2, struct term x3, struct term x4, struct term x5, struct term x6) {
+  xs[6] = x6;
+  return call_6(fun, x0, x1, x2, x3, x4, x5);
+}
+
+struct term call_8(struct term (*fun)(), struct term x0, struct term x1, struct term x2, struct term x3, struct term x4, struct term x5, struct term x6, struct term x7) {
+  xs[7] = x7;
+  return call_7(fun, x0, x1, x2, x3, x4, x5, x6);
+}
+
+struct term call_9(struct term (*fun)(), struct term x0, struct term x1, struct term x2, struct term x3, struct term x4, struct term x5, struct term x6, struct term x7, struct term x8) {
+  xs[8] = x8;
+  return call_8(fun, x0, x1, x2, x3, x4, x5, x6, x7);
+}
+
 // Virtual machine support functions
 
 int bit_to_byte_size(int length) {
@@ -316,16 +367,16 @@ int bif_length(struct term a, struct term *b) {
   return true;
 }
 
-struct term erlang_get_module_info_1(struct term a) {
+struct term erlang_get_module_info_1() {
   abort();
 }
 
-struct term erlang_get_module_info_2(struct term a, struct term b) {
+struct term erlang_get_module_info_2() {
   abort();
 }
 
-struct term erlang_2B_2(struct term a, struct term b) {
+struct term erlang_2B_2() {
   struct term c;
-  if(!bif_add(a, b, &c)) abort();
+  if(!bif_add(xs[0], xs[1], &c)) abort();
   else return c;
 }

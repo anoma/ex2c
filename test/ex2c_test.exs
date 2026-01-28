@@ -6,9 +6,9 @@ defmodule Ex2cTest do
   @doc """
   Compilation produces the factorial function in C which can be used as follows:
   int main(int argc, char *argv[]) {
-  display(Elixir_Factorial_factorial_1(make_small(5)));
+  display(call_1(Elixir2EFactorial_factorial_1, make_small(5)));
   // Expected output: 120
-  display(Elixir_Factorial_factorial_1(make_small(6)));
+  display(call_1(Elixir2EFactorial_factorial_1, make_small(6)));
   // Expected output: 720
   return 0;
   }
@@ -30,9 +30,9 @@ defmodule Ex2cTest do
   @doc """
   Compilation produces the gcd function in C which can be used as follows:
   int main(int argc, char *argv[]) {
-  display(Elixir_GCD_gcd_2(make_small(5), make_small(9)));
+  display(call_2(Elixir2EGCD_gcd_2, make_small(5), make_small(9)));
   // Expected output: 1
-  display(Elixir_GCD_gcd_2(make_small(123), make_small(1002)));
+  display(call_2(Elixir2EGCD_gcd_2, make_small(123), make_small(1002)));
   // Expected output: 3
   return 0;
   }
@@ -54,9 +54,10 @@ defmodule Ex2cTest do
   @doc """
   Compilation produces the bezout function in C which can be used as follows:
   int main(int argc, char *argv[]) {
-  display(Elixir_Bezout_bezout_2(make_small(5), make_small(9)));
+  //struct term t = Elixir_Factorial___info___1(make_atom(6, "module"));
+  display(call_2(Elixir2EBezout_bezout_2, make_small(5), make_small(9)));
   // Expected output: {1, 2, -1}
-  display(Elixir_Bezout_bezout_2(make_small(123), make_small(1002)));
+  display(call_2(Elixir2EBezout_bezout_2, make_small(123), make_small(1002)));
   // Expected output: {3, -57, 7}
   return 0;
   }
@@ -81,13 +82,13 @@ defmodule Ex2cTest do
   @doc """
   Compilation produces a merge sort function in C which can be used as follows:
   int main(int argc, char *argv[]) {
-  display(Elixir_MergeSort_sort_1(make_list(make_small(3), make_nil())));
+  display(call_1(Elixir2EMergeSort_sort_1, make_list(make_small(3), make_nil())));
   // Expected output: [3]
-  display(Elixir_MergeSort_sort_1(make_list(make_small(3), make_list(make_small(2), make_nil()))));
+  display(call_1(Elixir2EMergeSort_sort_1, make_list(make_small(3), make_list(make_small(2), make_nil()))));
   // Expected output: [2, 3]
-  display(Elixir_MergeSort_sort_1(make_list(make_small(3), make_list(make_small(2), make_list(make_small(1), make_nil())))));
+  display(call_1(Elixir2EMergeSort_sort_1, make_list(make_small(3), make_list(make_small(2), make_list(make_small(1), make_nil())))));
   // Expected output: [1, 2, 3]
-  display(Elixir_MergeSort_sort_1(make_list(make_small(3), make_list(make_small(1), make_list(make_small(2), make_nil())))));
+  display(call_1(Elixir2EMergeSort_sort_1, make_list(make_small(3), make_list(make_small(1), make_list(make_small(2), make_nil())))));
   // Expected output: [1, 2, 3]
   return 0;
   }
@@ -124,9 +125,9 @@ defmodule Ex2cTest do
   @doc """
   Compilation produces zip and unzip functions in C which can be used as follows:
   int main(int argc, char *argv[]) {
-  display(Elixir_Zip_zip_2(make_list(make_small(0), make_list(make_small(2), make_list(make_small(4), make_list(make_small(6), make_nil())))), make_list(make_small(1), make_list(make_small(3), make_list(make_small(5), make_nil())))));
+  display(call_2(Elixir2EZip_zip_2, make_list(make_small(0), make_list(make_small(2), make_list(make_small(4), make_list(make_small(6), make_nil())))), make_list(make_small(1), make_list(make_small(3), make_list(make_small(5), make_nil())))));
   // Expected output: [{0, 1}, {2, 3}, {4, 5}]
-  display(Elixir_Zip_unzip_1(make_list(make_tuple(2, (struct term []) { make_small(0), make_small(9) }), make_list(make_tuple(2, (struct term []) { make_small(1), make_small(8) }), make_list(make_tuple(2, (struct term []) { make_small(2), make_small(7) }), make_nil())))));
+  display(call_1(Elixir2EZip_unzip_1, make_list(make_tuple(2, (struct term []) { make_small(0), make_small(9) }), make_list(make_tuple(2, (struct term []) { make_small(1), make_small(8) }), make_list(make_tuple(2, (struct term []) { make_small(2), make_small(7) }), make_nil())))));
   // Expected output: {[0, 1, 2], [9, 8, 7]}
   return 0;
   }
@@ -155,17 +156,17 @@ defmodule Ex2cTest do
   @doc """
   Compilation process produces higher order functions in C which can be used as follows:
   int main(int argc, char *argv[]) {
-  display(Elixir2EMyList_sum_left_1(make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil())))));
+  display(call_1(Elixir2EMyList_sum_left_1, make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil())))));
   // Expected output: 13
-  display(Elixir2EMyList_sum_left_1(make_nil()));
+  display(call_1(Elixir2EMyList_sum_left_1, make_nil()));
   // Expected output: 0
-  display(Elixir2EMyList_sum_right_1(make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil())))));
+  display(call_1(Elixir2EMyList_sum_right_1, make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil())))));
   // Expected output: 13
-  display(Elixir2EMyList_sum_right_1(make_nil()));
+  display(call_1(Elixir2EMyList_sum_right_1, make_nil()));
   // Expected output: 0
-  display(Elixir2EMyList_multiply_2(make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil()))), make_small(5)));
-  // Expected output: [10, 14, 2]
-  display(Elixir2EMyList_evens_1(make_list(make_small(5), make_list(make_small(6), make_list(make_small(7), make_list(make_small(1), make_nil()))))));
+  display(call_2(Elixir2EMyList_multiply_2, make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil()))), make_small(5)));
+  // Expected output: [25, 35, 5]
+  display(call_1(Elixir2EMyList_evens_1, make_list(make_small(5), make_list(make_small(6), make_list(make_small(7), make_list(make_small(1), make_nil()))))));
   // Expected output: [6]
   return 0;
   }

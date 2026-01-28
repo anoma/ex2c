@@ -139,32 +139,27 @@ defmodule Ex2c do
   end
 
   def compile_code(code = {:call, arity, label}) do
-    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
-    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, cargs}
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, []}
     [{:comment_stmt, Kernel.inspect(code)}, {:expr_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
   end
 
   def compile_code(code = {:call_only, arity, label}) do
-    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
-    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, cargs}
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, []}
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
   end
 
   def compile_code(code = {:call_ext_only, arity, label}) do
-    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
-    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, cargs}
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, []}
     [{:comment_stmt, Kernel.inspect(code)}, {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
   end
 
   def compile_code(code = {:call_ext, arity, label}) do
-    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
-    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, cargs}
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, []}
     [{:comment_stmt, Kernel.inspect(code)}, {:expr_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
   end
 
   def compile_code(code = {:call_last, arity, label, deallocate}) do
-    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
-    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, cargs}
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, []}
     [{:comment_stmt, Kernel.inspect(code)},
      {:expr_stmt, {:binary_expr, :"+=", {:symbol_expr, "E"}, {:literal_expr, deallocate + 1}}},
      {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}]
@@ -260,17 +255,15 @@ defmodule Ex2c do
     counter_symbol = {:symbol_expr, "i"}
     env = {:member_access_expr, {:member_access_expr, {:symbol_expr, tmp}, "fun"}, "env"}
     ptr = {:member_access_expr, {:member_access_expr, {:symbol_expr, tmp}, "fun"}, "ptr"}
-    cargs =  for idx <- 0..(arity-1)//1, do: compile_operand({:x, idx})
-    cparams =  for _idx <- 0..(arity-1)//1, do: {"struct term", {:identifier_declarator, ""}}
     cfunc_decl =
       {:function_declarator,
-       {:pointer_declarator, {:identifier_declarator, ""}}, cparams}
+       {:pointer_declarator, {:identifier_declarator, ""}}, []}
     cfunc_type = {:type_name, "struct term", cfunc_decl}
     [{:comment_stmt, Kernel.inspect(code)},
      {:declaration_stmt, "struct term", [{{:identifier_declarator, tmp}, {:subscript_expr, xs, {:literal_expr, arity}}}]},
      {:for_stmt, {:declaration_stmt, "int", [{{:identifier_declarator, counter}, {:literal_expr, 0}}]}, {:binary_expr, :<, counter_symbol, num_free}, {:postfix_expr, :++, counter_symbol},
       [{:expr_stmt, {:binary_expr, :=, {:subscript_expr, xs, {:binary_expr, :+, counter_symbol, {:literal_expr, arity}}}, {:subscript_expr, env, counter_symbol}}}]},
-     {:expr_stmt, {:binary_expr, :=, compile_operand({:x, 0}), {:call_expr, {:cast_expr, cfunc_type, ptr}, cargs}}}
+     {:expr_stmt, {:binary_expr, :=, compile_operand({:x, 0}), {:call_expr, {:cast_expr, cfunc_type, ptr}, []}}}
     ]
   end
 
@@ -288,23 +281,14 @@ defmodule Ex2c do
   def compile_code(code = {:test_heap, _need, _live}), do: [{:comment_stmt, Kernel.inspect(code)}]
 
   def compile_function({module, {:function, name, arity, entry, code}}, acc) do
-    cparams =
-      for idx <- 0..(arity-1)//1,
-          do:
-            {"struct term",
-             {:identifier_declarator, "x#{idx}"}}
     cfunc_decl =
       {:function_declarator,
-       {:identifier_declarator, compile_label({module, name, arity})}, cparams}
+       {:identifier_declarator, compile_label({module, name, arity})}, []}
     cfunc_type = {:type_name, "struct term", cfunc_decl}
-    cfunc_prologue =
-      for idx <- 0..(arity-1)//1,
-          do:
-            {:expr_stmt, {:binary_expr, :=, compile_operand({:x, idx}), {:symbol_expr, "x#{idx}"}}}
     cfunc_body = Enum.flat_map(code, &Ex2c.compile_code/1)
     [{:declaration_stmt, "struct term", [{cfunc_decl, nil}]} | acc] ++
     [{:comment_stmt, Kernel.inspect({:function, name, arity, entry, []})},
-     {:function_stmt, specifier(cfunc_type), cfunc_decl, cfunc_prologue ++ cfunc_body}]
+     {:function_stmt, specifier(cfunc_type), cfunc_decl, cfunc_body}]
   end
 
   def compile_bytes(beam) do
