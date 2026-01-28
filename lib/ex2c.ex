@@ -15,9 +15,9 @@ defmodule Ex2c do
 
   def compile_label({:f, index}), do: beam_label_to_c(index)
 
-  def compile_label({module, function, arity}), do: String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "_"), ".", "_"), "/", "_")
+  def compile_label({module, function, arity}), do: String.replace(String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B")
 
-  def compile_label({:extfunc, module, function, arity}), do: String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "_"), ".", "_"), "/", "_")
+  def compile_label({:extfunc, module, function, arity}), do: String.replace(String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B")
 
   def compile_goto({:f, 0}), do: {:expr_stmt, {:call_expr, {:symbol_expr, "abort"}, []}}
 
@@ -45,6 +45,18 @@ defmodule Ex2c do
     byte_list = :binary.bin_to_list(padded_bits)
     byte_array = {:compound_literal_expr, "unsigned char []", Enum.map(byte_list, fn x -> {:expr_initializer, {:literal_expr, x}} end)}
     {:call_expr, {:symbol_expr, "make_bitstring"}, [{:literal_expr, size}, byte_array]}
+  end
+
+  def compile_literal(x) when is_function(x) do
+    cfunc_decl =
+      {:function_declarator,
+       {:pointer_declarator, {:identifier_declarator, ""}}, []}
+    cfunc_type = {:type_name, "struct term", cfunc_decl}
+    fun_info = :erlang.fun_info(x)
+    {:call_expr, {:symbol_expr, "make_fun"}, [
+      {:cast_expr, cfunc_type, {:address_of_expr, {:symbol_expr, compile_label({fun_info[:module], fun_info[:name], fun_info[:arity]})}}},
+      {:literal_expr, length(fun_info[:env])},
+      {:compound_literal_expr, "struct term []", Enum.map(fun_info[:env], fn x -> {:expr_initializer, compile_operand(x)} end)}]}
   end
 
   def compile_operand({:integer, val}), do: {:call_expr, {:symbol_expr, "make_small"}, [{:literal_expr, val}]}
@@ -194,6 +206,12 @@ defmodule Ex2c do
       [compile_goto(label)], []}]
   end
 
+  def compile_code(code = {:bif, :"=:=", label, arguments, reg}) do
+    [{:comment_stmt, Kernel.inspect(code)},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_eq_exact"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+      [compile_goto(label)], []}]
+  end
+
   def compile_code(code = {:init_yregs, {:list, regs}}) do
     [{:comment_stmt, Kernel.inspect(code)} |
      Enum.map(regs, fn x -> {:expr_stmt, {:binary_expr, :=, compile_operand(x), compile_operand(nil)}} end)]
@@ -252,7 +270,7 @@ defmodule Ex2c do
      {:declaration_stmt, "struct term", [{{:identifier_declarator, tmp}, {:subscript_expr, xs, {:literal_expr, arity}}}]},
      {:for_stmt, {:declaration_stmt, "int", [{{:identifier_declarator, counter}, {:literal_expr, 0}}]}, {:binary_expr, :<, counter_symbol, num_free}, {:postfix_expr, :++, counter_symbol},
       [{:expr_stmt, {:binary_expr, :=, {:subscript_expr, xs, {:binary_expr, :+, counter_symbol, {:literal_expr, arity}}}, {:subscript_expr, env, counter_symbol}}}]},
-     {:expr_stmt, {:call_expr, {:cast_expr, cfunc_type, ptr}, cargs}}
+     {:expr_stmt, {:binary_expr, :=, compile_operand({:x, 0}), {:call_expr, {:cast_expr, cfunc_type, ptr}, cargs}}}
     ]
   end
 

@@ -151,4 +151,52 @@ defmodule Ex2cTest do
     output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[Zip])
     Logger.info(output)
   end
+
+  @doc """
+  Compilation process produces higher order functions in C which can be used as follows:
+  int main(int argc, char *argv[]) {
+  display(Elixir2EMyList_sum_left_1(make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil())))));
+  // Expected output: 13
+  display(Elixir2EMyList_sum_left_1(make_nil()));
+  // Expected output: 0
+  display(Elixir2EMyList_sum_right_1(make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil())))));
+  // Expected output: 13
+  display(Elixir2EMyList_sum_right_1(make_nil()));
+  // Expected output: 0
+  display(Elixir2EMyList_multiply_2(make_list(make_small(5), make_list(make_small(7), make_list(make_small(1), make_nil()))), make_small(5)));
+  // Expected output: [10, 14, 2]
+  display(Elixir2EMyList_evens_1(make_list(make_small(5), make_list(make_small(6), make_list(make_small(7), make_list(make_small(1), make_nil()))))));
+  // Expected output: [6]
+  return 0;
+  }
+  """
+  test "compile some higher order functions" do
+    quoted =
+      quote do
+        defmodule MyList do
+          # Map each element of a list
+          def map([], f), do: []
+          def map([x | xs], f), do: [f.(x) | map(xs, f)]
+          # Fold left over elements of a list
+          def fold_left([], acc, f), do: acc
+          def fold_left([x | xs], acc, f), do: fold_left(xs, f.(acc, x), f)
+          # Fold right over elements of a list
+          def fold_right([], acc, f), do: acc
+          def fold_right([x | xs], acc, f), do: f.(x, fold_right(xs, acc, f))
+          # Filter elements of a list
+          def filter([], pred), do: []
+          def filter([x | xs], pred) do
+            xs = filter(xs, pred)
+            if pred.(x) do [x | xs] else xs end
+          end
+          # Use the higher order functions
+          def multiply(x, y), do: map(x, fn x -> y*x end)
+          def sum_left(x), do: fold_left(x, 0, &(&1 + &2))
+          def sum_right(x), do: fold_right(x, 0, fn x, y -> x+y end)
+          def evens(x), do: filter(x, fn x -> Kernel.rem(x, 2) == 0 end)
+        end
+      end
+    output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[MyList])
+    Logger.info(output)
+  end
 end

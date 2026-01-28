@@ -256,6 +256,15 @@ bool is_eq_exact(struct term t, struct term u) {
   }
 }
 
+bool bif_eq_exact(struct term t, struct term u, struct term *v) {
+  if(is_eq_exact(t, u)) {
+    *v = make_atom(4, "true");
+  } else {
+    *v = make_atom(5, "false");
+  }
+  return true;
+}
+
 bool is_eq(struct term t, struct term u) {
   return is_eq_exact(t, u);
 }
@@ -313,4 +322,10 @@ struct term erlang_get_module_info_1(struct term a) {
 
 struct term erlang_get_module_info_2(struct term a, struct term b) {
   abort();
+}
+
+struct term erlang_2B_2(struct term a, struct term b) {
+  struct term c;
+  if(!bif_add(a, b, &c)) abort();
+  else return c;
 }
