@@ -275,54 +275,70 @@ void get_tl(struct term t, struct term *tl) {
   *tl = *t.list.tail;
 }
 
-bool is_eq_exact(struct term t, struct term u) {
-  if(t.type != u.type) return false;
-  switch(t.type) {
-    case NIL:
-      return true;
-    case LIST:
-      return is_eq_exact(*t.list.head, *u.list.head) && is_eq_exact(*t.list.tail, *u.list.tail);
-    case SMALL:
-      return t.small.value == u.small.value;
-    case ATOM:
-      return t.atom.length == u.atom.length && !memcmp(t.atom.value, u.atom.value, t.atom.length);
-    case TUPLE:
-      if(t.tuple.length != u.tuple.length) return false;
-      for(int i = 0; i < t.tuple.length; i++) {
-        if(!is_eq_exact(t.tuple.values[i], u.tuple.values[i])) {
-          return false;
-        }
-      }
-      return true;
-    case BITSTRING:
-      return t.bitstring.length == u.bitstring.length && !memcmp(t.bitstring.bytes, u.bitstring.bytes, bit_to_byte_size(t.bitstring.length));
-    case FUN:
-      if(t.fun.ptr != u.fun.ptr || t.fun.num_free != u.fun.num_free) return false;
-      for(int i = 0; i < t.fun.num_free; i++) {
-        if(!is_eq_exact(t.fun.env[i], u.fun.env[i])) {
-          return false;
-        }
-      }
-      return true;
+int tag_index(enum term_type t) {
+  switch(t) {
+  case NIL: return 4;
+  case LIST: return 5;
+  case SMALL: return 0;
+  case ATOM: return 1;
+  case TUPLE: return 3;
+  case BITSTRING: return 6;
+  case FUN: return 2;
   }
 }
 
+int cmp_exact(struct term t, struct term u) {
+  if(t.type != u.type) return tag_index(t.type) - tag_index(u.type);
+  switch(t.type) {
+    case NIL:
+      return 0;
+    case LIST:
+      return cmp_exact(*t.list.head, *u.list.head) || cmp_exact(*t.list.tail, *u.list.tail);
+    case SMALL:
+      return t.small.value - u.small.value;
+    case ATOM:
+      return t.atom.length - u.atom.length || memcmp(t.atom.value, u.atom.value, t.atom.length);
+  case TUPLE: {
+      int diff = t.tuple.length - u.tuple.length;
+      if(diff) return diff;
+      for(int i = 0; i < t.tuple.length; i++) {
+        int diff = cmp_exact(t.tuple.values[i], u.tuple.values[i]);
+        if(diff) {
+          return diff;
+        }
+      }
+      return 0;
+  } case BITSTRING:
+      return t.bitstring.length - u.bitstring.length || memcmp(t.bitstring.bytes, u.bitstring.bytes, bit_to_byte_size(t.bitstring.length));
+  case FUN: {
+      int diff = t.fun.ptr - u.fun.ptr || t.fun.num_free - u.fun.num_free;
+      if(diff) return diff;
+      for(int i = 0; i < t.fun.num_free; i++) {
+        int diff = cmp_exact(t.fun.env[i], u.fun.env[i]);
+        if(diff) {
+          return diff;
+        }
+      }
+      return 0;
+  }
+  }
+}
+
+bool cmp(struct term t, struct term u) { return cmp_exact(t, u); }
+
+bool is_eq_exact(struct term t, struct term u) { return cmp_exact(t, u) == 0; }
+
+bool is_ge(struct term t, struct term u) {
+  return cmp_exact(t, u) >= 0;
+}
+
 bool bif_eq_exact(struct term t, struct term u, struct term *v) {
-  if(is_eq_exact(t, u)) {
+  if(cmp_exact(t, u) == 0) {
     *v = make_atom(4, "true");
   } else {
     *v = make_atom(5, "false");
   }
   return true;
-}
-
-bool is_eq(struct term t, struct term u) {
-  return is_eq_exact(t, u);
-}
-
-bool is_ge(struct term t, struct term u) {
-  if(t.type != u.type || t.type != SMALL) return false;
-  return t.small.value >= u.small.value;
 }
 
 bool bif_sub(struct term a, struct term b, struct term *c) {

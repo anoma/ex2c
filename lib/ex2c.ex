@@ -98,7 +98,7 @@ defmodule Ex2c do
   def compile_code(code = {:select_val, selector, fail, {:list, [value, label | rest]}}, state = %__MODULE__{}) do
     {rest, state} = compile_code({:select_val, selector, fail, {:list, rest}}, state)
     {[{:comment_stmt, Kernel.inspect(code)},
-     {:if_stmt, {:call_expr, {:symbol_expr, "is_eq_exact"}, [compile_operand(selector), compile_operand(value)]},
+     {:if_stmt, {:binary_expr, :==, {:call_expr, {:symbol_expr, "cmp_exact"}, [compile_operand(selector), compile_operand(value)]}, {:literal_expr, 0}},
       [{:goto_stmt, compile_label(label)}], rest}], state}
   end
 
