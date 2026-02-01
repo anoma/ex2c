@@ -207,7 +207,7 @@ defmodule Ex2cTest do
   display(call_0(Elixir2EMyLiteral_my_literal_0));
   // Expected output: [%{:hello => 100, :bye => 2}]
   display(call_0(Elixir2EMyLiteral_my_literal2_0));
-  // Expected output: [%{:hello => 100, :bye => #Fun<0x4046c9>}]
+  // Expected output: [%{:hello => 100, :bye => #Fun<Elixir2EMyLiteral_2Dmy_literal22F02Dfun2D02D_1>}]
   return 0;
   }
   """

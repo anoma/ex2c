@@ -69,10 +69,13 @@ defmodule Ex2c do
        {:pointer_declarator, {:identifier_declarator, ""}}, []}
     cfunc_type = {:type_name, "struct term", cfunc_decl}
     fun_info = :erlang.fun_info(x)
+    cfun_id = compile_label({fun_info[:module], fun_info[:name], fun_info[:arity]})
     {:call_expr, {:symbol_expr, "make_fun"}, [
-      {:cast_expr, cfunc_type, {:address_of_expr, {:symbol_expr, compile_label({fun_info[:module], fun_info[:name], fun_info[:arity]})}}},
-      {:literal_expr, length(fun_info[:env])},
-      {:compound_literal_expr, "struct term []", Enum.map(fun_info[:env], fn x -> {:expr_initializer, compile_operand(x)} end)}]}
+    {:cast_expr, cfunc_type, {:address_of_expr, {:symbol_expr, cfun_id}}},
+    {:literal_expr, cfun_id},
+    {:literal_expr, String.length(cfun_id)},
+    {:literal_expr, length(fun_info[:env])},
+    {:compound_literal_expr, "struct term []", Enum.map(fun_info[:env], fn x -> {:expr_initializer, compile_operand(x)} end)}]}
   end
 
   def compile_literal(map) when map == %{}, do: {:call_expr, {:symbol_expr, "make_map"}, []}
@@ -296,9 +299,12 @@ defmodule Ex2c do
       {:function_declarator,
        {:pointer_declarator, {:identifier_declarator, ""}}, []}
     cfunc_type = {:type_name, "struct term", cfunc_decl}
+    cfun_id = compile_label(label)
     {[{:comment_stmt, Kernel.inspect(code)},
      {:expr_stmt, {:binary_expr, :=, compile_operand(dst), {:call_expr, {:symbol_expr, "make_fun"}, [
-      {:cast_expr, cfunc_type, {:address_of_expr, {:symbol_expr, compile_label(label)}}},
+       {:cast_expr, cfunc_type, {:address_of_expr, {:symbol_expr, cfun_id}}},
+       {:literal_expr, cfun_id},
+       {:literal_expr, String.length(cfun_id)},
       {:literal_expr, length(env)},
       {:compound_literal_expr, "struct term []", Enum.map(env, fn x -> {:expr_initializer, compile_operand(x)} end)}]}}}], state}
   end

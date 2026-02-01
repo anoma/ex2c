@@ -29,6 +29,8 @@ struct nil {};
 
 struct fun {
   struct term (*ptr)();
+  char *id;
+  uint32_t id_len;
   uint32_t num_free;
   struct term *env;
 };
@@ -113,10 +115,12 @@ struct term make_nil() {
   return t;
 }
 
-struct term make_fun(struct term (*ptr)(), uint32_t num_free, struct term *env) {
+struct term make_fun(struct term (*ptr)(), char *id, uint32_t id_len, uint32_t num_free, struct term *env) {
   struct term t;
   t.type = FUN;
   t.fun.ptr = ptr;
+  t.fun.id = id;
+  t.fun.id_len = id_len;
   t.fun.num_free = num_free;
   t.fun.env = (struct term *) calloc(num_free, sizeof(struct term));
   for(int i = 0; i < num_free; i++) {
@@ -238,7 +242,7 @@ void display_aux(struct term *t) {
       printf("}");
       break;
     case FUN:
-      printf("#Fun<%p>", t->fun.ptr);
+      printf("#Fun<%s>", t->fun.id);
       break;
     case BITSTRING:
       printf("<<");
@@ -350,8 +354,9 @@ int cmp_exact(struct term t, struct term u) {
         int diff = memcmp(t.bitstring.bytes, u.bitstring.bytes, bit_to_byte_size(min(t.bitstring.length, u.bitstring.length)));
         return diff ? diff : t.bitstring.length - u.bitstring.length;
       } case FUN: {
-          int diff0 = t.fun.ptr - u.fun.ptr;
-          int diff = diff0 ? diff0 : t.fun.num_free - u.fun.num_free;
+          int diff0 = memcmp(t.fun.id, u.fun.id, min(t.fun.id_len, u.fun.id_len));
+          int diff1 = diff0 ? diff0 : t.fun.id_len - u.fun.id_len;
+          int diff = diff1 ? diff1 : t.fun.num_free - u.fun.num_free;
           if(diff) return diff;
           for(int i = 0; i < t.fun.num_free; i++) {
             int diff = cmp_exact(t.fun.env[i], u.fun.env[i]);
