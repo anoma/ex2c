@@ -200,4 +200,26 @@ defmodule Ex2cTest do
     output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[MyList])
     Logger.info(output)
   end
+
+  @doc """
+  Compilation process produces literls in C which can be used as follows:
+  int main(int argc, char *argv[]) {
+  display(call_0(Elixir2EMyLiteral_my_literal_0));
+  // Expected output: [%{:hello => 100, :bye => 2}]
+  display(call_0(Elixir2EMyLiteral_my_literal2_0));
+  // Expected output: [%{:hello => 100, :bye => #Fun<0x4046c9>}]
+  return 0;
+  }
+  """
+  test "compile various literals" do
+    quoted =
+      quote do
+        defmodule MyLiteral do
+          def my_literal(), do: [%{:hello => 100, :bye => 2}]
+          def my_literal2(), do: [%{:hello => 100, :bye => fn x -> 2*x+1 end}]
+        end
+      end
+    output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[MyLiteral])
+    Logger.info(output)
+  end
 end

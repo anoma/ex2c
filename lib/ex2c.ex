@@ -75,6 +75,16 @@ defmodule Ex2c do
       {:compound_literal_expr, "struct term []", Enum.map(fun_info[:env], fn x -> {:expr_initializer, compile_operand(x)} end)}]}
   end
 
+  def compile_literal(map) when map == %{}, do: {:call_expr, {:symbol_expr, "make_map"}, []}
+
+  def compile_literal(x) when is_map(x) do
+    {:call_expr, {:symbol_expr, "put_map_assoc_nofail"}, [
+    compile_literal(%{}),
+    {:compound_literal_expr, "struct term []", Enum.map(Map.keys(x), fn x -> {:expr_initializer, Ex2c.compile_literal(x)} end)},
+    {:compound_literal_expr, "struct term []", Enum.map(Map.values(x), fn x -> {:expr_initializer, Ex2c.compile_literal(x)} end)},
+    {:literal_expr, map_size(x)}]}
+  end
+
   def compile_operand({:integer, val}), do: {:call_expr, {:symbol_expr, "make_small"}, [{:literal_expr, val}]}
 
   def compile_operand(nil), do: compile_literal([])
@@ -138,6 +148,24 @@ defmodule Ex2c do
     {[{:comment_stmt, Kernel.inspect(code)}, ccall], state}
   end
 
+  def compile_code(code = {name = :get_hd, source, head}, state = %__MODULE__{}) do
+    cargs = [
+      compile_operand(source),
+      {:address_of_expr, compile_operand(head)}
+    ]
+    ccall = {:expr_stmt, {:call_expr, {:symbol_expr, Atom.to_string(name)}, cargs}}
+    {[{:comment_stmt, Kernel.inspect(code)}, ccall], state}
+  end
+
+  def compile_code(code = {name = :get_tl, source, tail}, state = %__MODULE__{}) do
+    cargs = [
+      compile_operand(source),
+      {:address_of_expr, compile_operand(tail)}
+    ]
+    ccall = {:expr_stmt, {:call_expr, {:symbol_expr, Atom.to_string(name)}, cargs}}
+    {[{:comment_stmt, Kernel.inspect(code)}, ccall], state}
+  end
+
   def compile_code(code = {name = :put_list, head, tail, dest}, state = %__MODULE__{}) do
     cargs = [
       compile_operand(head),
@@ -182,6 +210,13 @@ defmodule Ex2c do
     {[{:comment_stmt, Kernel.inspect(code)},
      {:expr_stmt, {:binary_expr, :"+=", {:symbol_expr, "E"}, {:literal_expr, deallocate + 1}}},
      {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}], state}
+  end
+
+  def compile_code(code = {:call_ext_last, arity, label, deallocate}, state = %__MODULE__{}) do
+    ccall = {:call_expr, {:symbol_expr, compile_label(label)}, []}
+    {[{:comment_stmt, Kernel.inspect(code)},
+      {:expr_stmt, {:binary_expr, :"+=", {:symbol_expr, "E"}, {:literal_expr, deallocate + 1}}},
+      {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}], state}
   end
 
   def compile_code(code = {:gc_bif, :-, label, _live, arguments, reg}, state = %__MODULE__{}) do
@@ -294,6 +329,25 @@ defmodule Ex2c do
     {[{:comment_stmt, Kernel.inspect(code)},
      {:expr_stmt, {:binary_expr, :=, {:subscript_expr, e_symbol, n_literal}, {:subscript_expr, e_symbol, {:literal_expr, 0}}}},
      {:expr_stmt, {:binary_expr, :"+=", e_symbol, n_literal}}], state}
+  end
+
+  def unweave([]), do: {[], []}
+
+  def unweave([key, value | rest]) do
+    {keys, values} = unweave(rest)
+    {[key | keys], [value | values]}
+  end
+
+  def compile_code(code = {:put_map_assoc, label, src, dest, live, {:list, rest}}, state = %__MODULE__{}) do
+    {keys, values} = unweave(rest)
+    {[{:comment_stmt, Kernel.inspect(code)},
+      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "put_map_assoc"}, [
+       compile_operand(src),
+       {:address_of_expr, compile_operand(dest)},
+       {:compound_literal_expr, "struct term []", Enum.map(keys, fn x -> {:expr_initializer, Ex2c.compile_operand(x)} end)},
+       {:compound_literal_expr, "struct term []", Enum.map(values, fn x -> {:expr_initializer, Ex2c.compile_operand(x)} end)},
+       {:literal_expr, length(keys)}]}},
+       [compile_goto(label)], []}], state}
   end
 
   def compile_code(code = {:line, _number}, state = %__MODULE__{}), do: {[{:comment_stmt, Kernel.inspect(code)}], state}

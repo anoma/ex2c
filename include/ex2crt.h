@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 // Definition of a term
 
@@ -44,7 +45,8 @@ enum term_type {
   LIST = 1,
   NIL = 27,
   FUN = 16,
-  BITSTRING = 17
+  BITSTRING = 17,
+  MAP = 28
 };
 
 struct term {
@@ -57,7 +59,14 @@ struct term {
     struct nil nil;
     struct fun fun;
     struct bitstring bitstring;
+    struct map *map;
   };
+};
+
+struct map {
+  struct term key;
+  struct term value;
+  struct map *tail;
 };
 
 // Convenience functions for term construction
@@ -121,6 +130,13 @@ struct term make_bitstring(uint32_t length, unsigned char *bytes) {
   t.type = BITSTRING;
   t.bitstring.length = length;
   t.bitstring.bytes = bytes;
+  return t;
+}
+
+struct term make_map() {
+  struct term t;
+  t.type = MAP;
+  t.map = NULL;
   return t;
 }
 
@@ -211,7 +227,7 @@ void display_aux(struct term *t) {
       printf("%i", t->small.value);
       break;
     case ATOM:
-      printf("%s", t->atom.value);
+      printf(":%s", t->atom.value);
       break;
     case TUPLE:
       printf("{");
@@ -234,6 +250,16 @@ void display_aux(struct term *t) {
       if(rem != 0) printf(" :: %u", rem);
       printf(">>");
       break;
+  case MAP:
+    printf("%%{");
+    for(int i = 0; t->map; i++, t->map = t->map->tail) {
+      if(i) printf(", ");
+      display_aux(&t->map->key);
+      printf(" => ");
+      display_aux(&t->map->value);
+    }
+    printf("}");
+    break;
   }
 }
 
@@ -271,34 +297,46 @@ void get_hd(struct term t, struct term *hd) {
   *hd = *t.list.head;
 }
 
-void get_tl(struct term t, struct term *tl) {
-  *tl = *t.list.tail;
+void get_tl(struct term t, struct term *tl) { *tl = *t.list.tail; }
+
+int map_size(struct term t) {
+  struct map *u = t.map;
+  int i;
+  for(i = 0; u; i++, u = u->tail) {}
+  return i;
 }
 
 int tag_index(enum term_type t) {
   switch(t) {
-  case NIL: return 4;
-  case LIST: return 5;
+  case NIL: return 5;
+  case LIST: return 6;
   case SMALL: return 0;
   case ATOM: return 1;
   case TUPLE: return 3;
-  case BITSTRING: return 6;
+  case BITSTRING: return 7;
   case FUN: return 2;
+  case MAP: return 4;
   }
 }
+
+int min(int a, int b) { return a < b ? a : b; }
+
+int max(int a, int b) { return a < b ? b : a; }
 
 int cmp_exact(struct term t, struct term u) {
   if(t.type != u.type) return tag_index(t.type) - tag_index(u.type);
   switch(t.type) {
-    case NIL:
-      return 0;
-    case LIST:
-      return cmp_exact(*t.list.head, *u.list.head) || cmp_exact(*t.list.tail, *u.list.tail);
-    case SMALL:
-      return t.small.value - u.small.value;
-    case ATOM:
-      return t.atom.length - u.atom.length || memcmp(t.atom.value, u.atom.value, t.atom.length);
-  case TUPLE: {
+  case NIL:
+    return 0;
+  case LIST: {
+    int diff = cmp_exact(*t.list.head, *u.list.head);
+    return diff ? diff : cmp_exact(*t.list.tail, *u.list.tail);
+  } case SMALL:
+    return t.small.value - u.small.value;
+  case ATOM: {
+    int diff = memcmp(t.atom.value, u.atom.value, min(t.atom.length, u.atom.length));
+    return diff ? diff : t.atom.length - u.atom.length;
+  } case TUPLE: {
       int diff = t.tuple.length - u.tuple.length;
       if(diff) return diff;
       for(int i = 0; i < t.tuple.length; i++) {
@@ -308,18 +346,39 @@ int cmp_exact(struct term t, struct term u) {
         }
       }
       return 0;
-  } case BITSTRING:
-      return t.bitstring.length - u.bitstring.length || memcmp(t.bitstring.bytes, u.bitstring.bytes, bit_to_byte_size(t.bitstring.length));
-  case FUN: {
-      int diff = t.fun.ptr - u.fun.ptr || t.fun.num_free - u.fun.num_free;
-      if(diff) return diff;
-      for(int i = 0; i < t.fun.num_free; i++) {
-        int diff = cmp_exact(t.fun.env[i], u.fun.env[i]);
-        if(diff) {
-          return diff;
+    } case BITSTRING: {
+        int diff = memcmp(t.bitstring.bytes, u.bitstring.bytes, bit_to_byte_size(min(t.bitstring.length, u.bitstring.length)));
+        return diff ? diff : t.bitstring.length - u.bitstring.length;
+      } case FUN: {
+          int diff0 = t.fun.ptr - u.fun.ptr;
+          int diff = diff0 ? diff0 : t.fun.num_free - u.fun.num_free;
+          if(diff) return diff;
+          for(int i = 0; i < t.fun.num_free; i++) {
+            int diff = cmp_exact(t.fun.env[i], u.fun.env[i]);
+            if(diff) {
+              return diff;
+            }
+          }
+          return 0;
         }
+  case MAP: {
+    int diff = map_size(t) - map_size(u);
+    if(diff) return diff;
+    struct map *v = t.map, *w = u.map;
+    for(; v; v = v->tail, w = w->tail) {
+      int diff = cmp_exact(v->key, w->key);
+      if(diff) {
+        return diff;
       }
-      return 0;
+    }
+    struct map *x = t.map, *y = u.map;
+    for(; x; x = x->tail, y = y->tail) {
+      int diff = cmp_exact(x->value, y->value);
+      if(diff) {
+        return diff;
+      }
+    }
+    return 0;
   }
   }
 }
@@ -395,4 +454,92 @@ struct term erlang_2B_2() {
   struct term c;
   if(!bif_add(xs[0], xs[1], &c)) abort();
   else return c;
+}
+
+int cmp_exact_r(const void *a, const void *b) {
+  const struct term **a_term = (const struct term **) a;
+  const struct term **b_term = (const struct term **) b;
+  return cmp(**a_term, **b_term);
+}
+
+bool put_map_assoc(struct term map_term, struct term *dst, struct term *keys, struct term *values, size_t size) {
+  // Sort the supplied keys in preparation forr map insertion
+  struct term *key_ptrs[size];
+  for(int i = 0; i < size; i++) key_ptrs[i] = &keys[i];
+  qsort(key_ptrs, size, sizeof(struct term *), cmp_exact_r);
+
+  struct map *map = map_term.map;
+  struct map *new_map = map;
+  struct map **new_map_ptr = &new_map;
+  // Insert the supplied key-value pairs into the map in order
+  for(int i = 0; i < size; i++) {
+    int j = key_ptrs[i] - keys;
+    int diff = true;
+    // Duplicate the map until we get to the matching entry
+    for(; map && (diff = cmp_exact(map->key, keys[j])) < 0; map = map->tail) {
+      *new_map_ptr = (struct map *) malloc(sizeof(struct map));
+      (*new_map_ptr)->key = map->key;
+      (*new_map_ptr)->value = map->value;
+      (*new_map_ptr)->tail = map->tail;
+      new_map_ptr = &(*new_map_ptr)->tail;
+    }
+    // Construct the map entry that will contain the given key-value pair
+    *new_map_ptr = (struct map *) malloc(sizeof(struct map));
+    (*new_map_ptr)->key = keys[j];
+    (*new_map_ptr)->value = values[j];
+    (*new_map_ptr)->tail = diff ? map : map->tail;
+    new_map_ptr = &(*new_map_ptr)->tail;
+  }
+  // Finally construct a term from the map with the new association
+  dst->type = MAP;
+  dst->map = new_map;
+  return true;
+}
+
+struct term put_map_assoc_nofail(struct term map_term, struct term *keys, struct term *values, size_t size) {
+  struct term dst;
+  assert(put_map_assoc(map_term, &dst, keys, values, size));
+  return dst;
+}
+
+bool put_map_exact(struct term map_term, struct term *dst, struct term *keys, struct term *values, size_t size) {
+  // Sort the supplied keys in preparation forr map insertion
+  struct term *key_ptrs[size];
+  for(int i = 0; i < size; i++) key_ptrs[i] = &keys[i];
+  qsort(key_ptrs, size, sizeof(struct term *), cmp_exact_r);
+
+  struct map *map = map_term.map;
+  struct map *new_map = map;
+  struct map **new_map_ptr = &new_map;
+  // Insert the supplied key-value pairs into the map in order
+  for(int i = 0; i < size; i++) {
+    int j = key_ptrs[i] - keys;
+    int diff = true;
+    // Duplicate the map until we get to the matching entry
+    for(; map && (diff = cmp_exact(map->key, keys[j])) < 0; map = map->tail) {
+      *new_map_ptr = (struct map *) malloc(sizeof(struct map));
+      (*new_map_ptr)->key = map->key;
+      (*new_map_ptr)->value = map->value;
+      (*new_map_ptr)->tail = map->tail;
+      new_map_ptr = &(*new_map_ptr)->tail;
+    }
+    // If diff != 0, then we did not arrive at equal term.
+    if(diff) return false;
+    // Construct the map entry that will contain the given key-value pair
+    *new_map_ptr = (struct map *) malloc(sizeof(struct map));
+    (*new_map_ptr)->key = keys[j];
+    (*new_map_ptr)->value = values[j];
+    (*new_map_ptr)->tail = map->tail;
+    new_map_ptr = &(*new_map_ptr)->tail;
+  }
+  // Finally construct a term from the map with the new association
+  dst->type = MAP;
+  dst->map = new_map;
+  return true;
+}
+
+struct term put_map_exact_nofail(struct term map_term, struct term *keys, struct term *values, size_t size) {
+  struct term dst;
+  assert(put_map_exact(map_term, &dst, keys, values, size));
+  return dst;
 }
