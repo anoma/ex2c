@@ -23,7 +23,7 @@ defmodule Ex2c do
 
   def beam_label_to_c(lbl), do: "L#{lbl}"
 
-  def escape_identifier(id), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(id, "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A")
+  def escape_identifier(id), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(id, "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A"), "^", "5E"), "$", "24")
 
   def bif_name_to_c(lbl), do: escape_identifier("bif_#{lbl}")
 
@@ -32,6 +32,10 @@ defmodule Ex2c do
   def compile_label({module, function, arity}), do: escape_identifier("#{module}_#{function}_#{arity}")
 
   def compile_label({:extfunc, module, function, arity}), do: escape_identifier("#{module}_#{function}_#{arity}")
+
+  def label_arity({_module, _function, arity}), do: arity
+
+  def labbel_arity({:extfunc, _module, _function, arity}), do: arity
 
   def compile_goto({:f, 0}), do: {:expr_stmt, {:call_expr, {:symbol_expr, "abort"}, []}}
 
@@ -78,6 +82,7 @@ defmodule Ex2c do
     {:cast_expr, cfunc_type, {:address_of_expr, {:symbol_expr, cfun_id}}},
     {:literal_expr, cfun_id},
     {:literal_expr, String.length(cfun_id)},
+    {:literal_expr, fun_info[:arity]},
     {:literal_expr, length(fun_info[:env])},
     {:compound_literal_expr, "struct term []", Enum.map(fun_info[:env], fn x -> {:expr_initializer, compile_operand(x)} end)}]}
   end
@@ -131,6 +136,10 @@ defmodule Ex2c do
     {[{:comment_stmt, Kernel.inspect(code)}, {:expr_stmt, {:binary_expr, :"-=", {:symbol_expr, "E"}, {:literal_expr, need_stack + 1}}}], state}
   end
 
+  def compile_code(code = {:allocate_heap, need_stack, _heap_need, _live}, state = %__MODULE__{}) do
+    {[{:comment_stmt, Kernel.inspect(code)}, {:expr_stmt, {:binary_expr, :"-=", {:symbol_expr, "E"}, {:literal_expr, need_stack + 1}}}], state}
+  end
+
   def compile_code(code = {:deallocate, deallocate}, state = %__MODULE__{}) do
     {[{:comment_stmt, Kernel.inspect(code)}, {:expr_stmt, {:binary_expr, :"+=", {:symbol_expr, "E"}, {:literal_expr, deallocate + 1}}}], state}
   end
@@ -142,6 +151,15 @@ defmodule Ex2c do
   def compile_code(code = {:test, name, label, arguments}, state = %__MODULE__{}) do
     {[{:comment_stmt, Kernel.inspect(code)},
      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, Atom.to_string(name)}, Enum.map(arguments, &Ex2c.compile_operand/1)}},
+      [compile_goto(label)], []}], state}
+  end
+
+  def compile_code(code = {:test, name, label, src, {:list, arguments}}, state = %__MODULE__{}) do
+    {[{:comment_stmt, Kernel.inspect(code)},
+      {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, Atom.to_string(name)}, [
+       compile_operand(src),
+       {:literal_expr, length(arguments)},
+       {:compound_literal_expr, "struct term []", Enum.map(arguments, fn x -> {:expr_initializer, Ex2c.compile_operand(x)} end)}]}},
       [compile_goto(label)], []}], state}
   end
 
@@ -279,8 +297,9 @@ defmodule Ex2c do
        {:cast_expr, cfunc_type, {:address_of_expr, {:symbol_expr, cfun_id}}},
        {:literal_expr, cfun_id},
        {:literal_expr, String.length(cfun_id)},
-      {:literal_expr, length(env)},
-      {:compound_literal_expr, "struct term []", Enum.map(env, fn x -> {:expr_initializer, compile_operand(x)} end)}]}}}], state}
+       {:literal_expr, label_arity(label)},
+       {:literal_expr, length(env)},
+       {:compound_literal_expr, "struct term []", Enum.map(env, fn x -> {:expr_initializer, compile_operand(x)} end)}]}}}], state}
   end
 
   def compile_code(code = {:call_fun, arity}, state = %__MODULE__{}) do
@@ -297,7 +316,27 @@ defmodule Ex2c do
        {:pointer_declarator, {:identifier_declarator, ""}}, []}
     cfunc_type = {:type_name, "struct term", cfunc_decl}
     {[{:comment_stmt, Kernel.inspect(code)},
-     {:declaration_stmt, "struct term", [{{:identifier_declarator, tmp}, {:subscript_expr, xs, {:literal_expr, arity}}}]},
+     {:declaration_stmt, "struct term", [{{:identifier_declarator, tmp}, compile_operand({:x, arity})}]},
+     {:for_stmt, {:declaration_stmt, "int", [{{:identifier_declarator, counter}, {:literal_expr, 0}}]}, {:binary_expr, :<, counter_symbol, num_free}, {:postfix_expr, :++, counter_symbol},
+      [{:expr_stmt, {:binary_expr, :=, {:subscript_expr, xs, {:binary_expr, :+, counter_symbol, {:literal_expr, arity}}}, {:subscript_expr, env, counter_symbol}}}]},
+     {:expr_stmt, {:binary_expr, :=, compile_operand({:x, 0}), {:call_expr, {:cast_expr, cfunc_type, ptr}, []}}}], state}
+  end
+
+  def compile_code(code = {:call_fun2, tag, arity, func}, state = %__MODULE__{}) do
+    xs = {:symbol_expr, "xs"}
+    counter = "i"
+    counter_symbol = {:symbol_expr, counter}
+    {state, tmp} = gen_sym(state)
+    fun = {:member_access_expr, {:symbol_expr, tmp}, "fun"}
+    num_free = {:member_access_expr, fun, "num_free"}
+    env = {:member_access_expr, fun, "env"}
+    ptr = {:member_access_expr, fun, "ptr"}
+    cfunc_decl =
+      {:function_declarator,
+       {:pointer_declarator, {:identifier_declarator, ""}}, []}
+    cfunc_type = {:type_name, "struct term", cfunc_decl}
+    {[{:comment_stmt, Kernel.inspect(code)},
+     {:declaration_stmt, "struct term", [{{:identifier_declarator, tmp}, compile_operand(func)}]},
      {:for_stmt, {:declaration_stmt, "int", [{{:identifier_declarator, counter}, {:literal_expr, 0}}]}, {:binary_expr, :<, counter_symbol, num_free}, {:postfix_expr, :++, counter_symbol},
       [{:expr_stmt, {:binary_expr, :=, {:subscript_expr, xs, {:binary_expr, :+, counter_symbol, {:literal_expr, arity}}}, {:subscript_expr, env, counter_symbol}}}]},
      {:expr_stmt, {:binary_expr, :=, compile_operand({:x, 0}), {:call_expr, {:cast_expr, cfunc_type, ptr}, []}}}], state}
@@ -335,6 +374,16 @@ defmodule Ex2c do
   def compile_code(code = {:func_info, _module, _func, _arity}, state = %__MODULE__{}), do: {[{:comment_stmt, Kernel.inspect(code)}], state}
 
   def compile_code(code = {:test_heap, _need, _live}, state = %__MODULE__{}), do: {[{:comment_stmt, Kernel.inspect(code)}], state}
+
+  def compile_code(code = {:case_end, op}, state = %__MODULE__{}) do
+    {[{:comment_stmt, Kernel.inspect(code)},
+      {:expr_stmt, {:call_expr, {:symbol_expr, "case_end"}, [Ex2c.compile_operand(op)]}}], state}
+  end
+
+  def compile_code(code = {:badmatch, op}, state = %__MODULE__{}) do
+    {[{:comment_stmt, Kernel.inspect(code)},
+      {:expr_stmt, {:call_expr, {:symbol_expr, "badmatch"}, [Ex2c.compile_operand(op)]}}], state}
+  end
 
   def emit_declaration(state = %__MODULE__{}, statement) do
     %__MODULE__{state | declarations: [statement | state.declarations]}

@@ -31,6 +31,7 @@ struct fun {
   struct term (*ptr)();
   char *id;
   uint32_t id_len;
+  uint32_t arity;
   uint32_t num_free;
   struct term *env;
 };
@@ -115,12 +116,13 @@ struct term make_nil() {
   return t;
 }
 
-struct term make_fun(struct term (*ptr)(), char *id, uint32_t id_len, uint32_t num_free, struct term *env) {
+struct term make_fun(struct term (*ptr)(), char *id, uint32_t id_len, uint32_t arity, uint32_t num_free, struct term *env) {
   struct term t;
   t.type = FUN;
   t.fun.ptr = ptr;
   t.fun.id = id;
   t.fun.id_len = id_len;
+  t.fun.arity = arity;
   t.fun.num_free = num_free;
   t.fun.env = (struct term *) calloc(num_free, sizeof(struct term));
   for(int i = 0; i < num_free; i++) {
@@ -356,7 +358,8 @@ int cmp_exact(struct term t, struct term u) {
       } case FUN: {
           int diff0 = memcmp(t.fun.id, u.fun.id, min(t.fun.id_len, u.fun.id_len));
           int diff1 = diff0 ? diff0 : t.fun.id_len - u.fun.id_len;
-          int diff = diff1 ? diff1 : t.fun.num_free - u.fun.num_free;
+          int diff2 = diff1 ? diff1 : t.fun.arity - u.fun.arity;
+          int diff = diff2 ? diff2 : t.fun.num_free - u.fun.num_free;
           if(diff) return diff;
           for(int i = 0; i < t.fun.num_free; i++) {
             int diff = cmp_exact(t.fun.env[i], u.fun.env[i]);
@@ -392,8 +395,14 @@ bool cmp(struct term t, struct term u) { return cmp_exact(t, u); }
 
 bool is_eq_exact(struct term t, struct term u) { return cmp_exact(t, u) == 0; }
 
-bool is_ge(struct term t, struct term u) {
-  return cmp_exact(t, u) >= 0;
+bool is_ne_exact(struct term t, struct term u) { return cmp_exact(t, u) != 0; }
+
+bool is_eq(struct term t, struct term u) { return cmp(t, u) == 0; }
+
+bool is_ge(struct term t, struct term u) { return cmp_exact(t, u) >= 0; }
+
+bool is_lt(struct term t, struct term u) {
+  return cmp_exact(t, u) < 0;
 }
 
 bool bif_3D3A3D(struct term t, struct term u, struct term *v) {
@@ -547,4 +556,179 @@ struct term put_map_exact_nofail(struct term map_term, struct term *keys, struct
   struct term dst;
   assert(put_map_exact(map_term, &dst, keys, values, size));
   return dst;
+}
+
+struct term erlang_error_1() {
+  printf("exception error:");
+  display(xs[0]);
+  abort();
+}
+
+struct term erlang_error_2() {
+  printf("exception error:");
+  display(xs[0]);
+  abort();
+}
+
+struct term erlang_error_3() {
+  printf("exception error:");
+  display(xs[0]);
+  abort();
+}
+
+struct term erlang_nif_error_1() {
+  printf("exception error:");
+  display(xs[0]);
+  abort();
+}
+
+struct term erlang_2B2B_2() {
+  struct term *x0 = &xs[0];
+  struct term concat;
+  concat.type = NIL;
+  // Duplicate the list in the first argument
+  struct term *concat_ptr = &concat;
+  for(; x0->type == LIST; x0 = x0->list.tail, concat_ptr = concat_ptr->list.tail) {
+    concat_ptr->type = LIST;
+    concat_ptr->list.head = x0->list.head;
+    concat_ptr->list.tail = (struct term *) malloc(sizeof(struct term));
+  }
+  // Ensure that the first argument is a proper list
+  assert(x0->type == NIL);
+  // Then set the tail of the concatenation to be the second argument
+  *concat_ptr = xs[1];
+  return concat;
+}
+
+bool is_atom(struct term t) { return t.type == ATOM; }
+
+bool is_float(struct term t) { return false; }
+
+bool is_list(struct term t) { return t.type == LIST || t.type == NIL; }
+
+bool is_integer(struct term t) { return t.type == SMALL; }
+
+bool is_function2(struct term t, struct term u) {
+  if(u.type != SMALL) {
+    printf("argument 2: not an integer");
+    abort();
+  } else if(u.small.value) {
+    printf("argument 2: out of range");
+    abort();
+  } else {
+    return t.type == FUN && u.type == SMALL && t.fun.arity == u.small.value;
+  }
+}
+
+void badmatch(struct term t) {
+  struct term exit_reason = make_tuple(2, (struct term []) { make_atom(8, "badmatch"), t });
+  display(exit_reason);
+  abort();
+}
+
+void case_end(struct term t) {
+  struct term exit_reason = make_tuple(2, (struct term []) { make_atom(11, "case_clause"), t });
+  display(exit_reason);
+  abort();
+}
+
+bool bif_element(struct term t, struct term u, struct term *v) {
+  if(t.type == SMALL && t.small.value > 0 && u.type == TUPLE && t.small.value <= u.tuple.length) {
+    *v = u.tuple.values[t.small.value - 1];
+    return true;
+  } else {
+    return false;
+  }
+}
+
+struct term erlang_setelement_3() {
+  if(xs[0].type == SMALL) {
+    printf("1st argument: not an integer");
+    abort();
+  } else if(xs[0].small.value <= 0 || xs[0].small.value > xs[1].tuple.length) {
+    printf("1st argument: out of range");
+    abort();
+  } else if(xs[1].type != TUPLE) {
+    printf("2nd argument: not a tuple");
+    abort();
+  } else {
+    struct term u = make_tuple(xs[0].small.value <= xs[1].tuple.length, xs[1].tuple.values);
+    u.tuple.values[xs[0].small.value - 1] = xs[2];
+    return u;
+  }
+}
+
+bool has_map_fields(struct term t, int len, struct term *fields) {
+  if(t.type != MAP) return false;
+  for(int i = 0; i < len; i++) {
+    bool found = false;
+    for(struct map *m = t.map; m; m = m->tail) {
+      if(cmp_exact(m->key, fields[i]) == 0) {
+        found = true;
+        break;
+      }
+    }
+    if(!found) return false;
+  }
+  return true;
+}
+
+bool is_tagged_tuple(struct term t, int len, struct term tag) {
+  return t.type == TUPLE && t.tuple.length == len && tag.type == ATOM && t.tuple.length > 0 && cmp_exact(t.tuple.values[0], tag) == 0;
+}
+
+struct term erlang_2D2D_2() {
+  struct term *x0 = &xs[0];
+  struct term duplicate;
+  duplicate.type = NIL;
+  // Duplicate the list in the first argument
+  struct term *duplicate_ptr = &duplicate;
+  for(; x0->type == LIST; x0 = x0->list.tail, duplicate_ptr = duplicate_ptr->list.tail) {
+    // Copy the current cell of x0 into duplicate
+    duplicate_ptr->type = LIST;
+    duplicate_ptr->list.head = x0->list.head;
+    duplicate_ptr->list.tail = (struct term *) malloc(sizeof(struct term));
+  }
+  // Ensure that the first argument is a proper list
+  assert(x0->type == NIL);
+  // Then set the tail of the duplicate to nil
+  *duplicate_ptr = *x0;
+  // Now remove the terms occuring in the second list
+  struct term *x1 = &xs[1];
+  for(; x1->type == LIST; x1 = x1->list.tail) {
+    // Iterate through the duplicate list looking for *x1->list.head
+    for(struct term *duplicate_ptr = &duplicate; duplicate_ptr->type == LIST;) {
+      // If *x1->list.head is found, then remove it
+      if(cmp_exact(*duplicate_ptr->list.head, *x1->list.head) == 0) {
+        struct term *tail = duplicate_ptr->list.tail;
+        // Remove *x1->list.head by overwriting it with its tail
+        *duplicate_ptr = *duplicate_ptr->list.tail;
+        // Since the tail has been copied and was created in this function, it's now dangling
+        free(tail);
+        // Only remove one instance of the match
+        break;
+      } else {
+        // Otherwise move to the next element
+        duplicate_ptr = duplicate_ptr->list.tail;
+      }
+    }
+  }
+  // Ensure that the second argument is a proper list
+  assert(x1->type == NIL);
+  return duplicate;
+}
+
+struct term erlang_integer_to_list_1() {
+  printf("integer_to_list/1 not implemented");
+  abort();
+}
+
+struct term erlang_float_to_list_1() {
+  printf("float_to_list/1 not implemented");
+  abort();
+}
+
+struct term erlang_atom_to_list_1() {
+  printf("atom_to_list/1 not implemented");
+  abort();
 }

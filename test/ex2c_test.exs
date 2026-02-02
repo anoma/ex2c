@@ -208,6 +208,10 @@ defmodule Ex2cTest do
   // Expected output: [%{:hello => 100, :bye => 2}]
   display(call_0(Elixir2EMyLiteral_my_literal2_0));
   // Expected output: [%{:hello => 100, :bye => #Fun<Elixir2EMyLiteral_2Dmy_literal22F02Dfun2D02D_1>}]
+  display(call_0(Elixir2EMyLiteral_my_literal3_0));
+  // Expected output: [3, 1, 2]
+  display(call_0(Elixir2EMyLiteral_my_literal5_0));
+  // Expected output: [1, 2, 3, 2, 1, 2, 2, 1, 2]
   return 0;
   }
   """
@@ -217,9 +221,26 @@ defmodule Ex2cTest do
         defmodule MyLiteral do
           def my_literal(), do: [%{:hello => 100, :bye => 2}]
           def my_literal2(), do: [%{:hello => 100, :bye => fn x -> 2*x+1 end}]
+          def my_literal4(), do: [2,1,2]
+          def my_literal3(), do: [1,2,3,2,1,2] -- my_literal4()
+          def my_literal5(), do: [1,2,3,2,1,2] ++ my_literal4()
         end
       end
     output = Ex2c.compile_bytes(Code.compile_quoted(quoted)[MyLiteral])
+    Logger.info(output)
+  end
+
+  @doc """
+  Check that the lists built in module can be compiled. Some checks follow:
+  int main(int argc, char *argv[]) {
+  display(call_2(lists_nth_2, make_small(4), make_list(make_atom(1, "a"), make_list(make_atom(1, "o"), make_list(make_atom(1, "g"), make_list(make_atom(1, "q"), make_list(make_atom(1, "j"), make_nil())))))));
+  // Expected output: :q
+  return 0;
+  }
+  """
+  test "compile the Erlang lists module" do
+    {module, beam, filename} = :code.get_object_code(:lists)
+    output = Ex2c.compile_bytes(beam)
     Logger.info(output)
   end
 end
