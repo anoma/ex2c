@@ -396,7 +396,7 @@ bool is_ge(struct term t, struct term u) {
   return cmp_exact(t, u) >= 0;
 }
 
-bool bif_eq_exact(struct term t, struct term u, struct term *v) {
+bool bif_3D3A3D(struct term t, struct term u, struct term *v) {
   if(cmp_exact(t, u) == 0) {
     *v = make_atom(4, "true");
   } else {
@@ -405,19 +405,19 @@ bool bif_eq_exact(struct term t, struct term u, struct term *v) {
   return true;
 }
 
-bool bif_sub(struct term a, struct term b, struct term *c) {
+bool bif_2D(struct term a, struct term b, struct term *c) {
   if(a.type != SMALL || b.type != SMALL) return false;
   c->type = SMALL;
   return !__builtin_sub_overflow(a.small.value, b.small.value, &c->small.value);
 }
 
-bool bif_add(struct term a, struct term b, struct term *c) {
+bool bif_2B(struct term a, struct term b, struct term *c) {
   if(a.type != SMALL || b.type != SMALL) return false;
   c->type = SMALL;
   return !__builtin_add_overflow(a.small.value, b.small.value, &c->small.value);
 }
 
-bool bif_mul(struct term a, struct term b, struct term *c) {
+bool bif_2A(struct term a, struct term b, struct term *c) {
   if(a.type != SMALL || b.type != SMALL) return false;
   c->type = SMALL;
   return !__builtin_mul_overflow(a.small.value, b.small.value, &c->small.value);
@@ -457,7 +457,7 @@ struct term erlang_get_module_info_2() {
 
 struct term erlang_2B_2() {
   struct term c;
-  if(!bif_add(xs[0], xs[1], &c)) abort();
+  if(!bif_2B(xs[0], xs[1], &c)) abort();
   else return c;
 }
 

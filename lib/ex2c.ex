@@ -23,11 +23,13 @@ defmodule Ex2c do
 
   def beam_label_to_c(lbl), do: "L#{lbl}"
 
+  def bif_name_to_c(lbl), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace("bif_#{lbl}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A")
+
   def compile_label({:f, index}), do: beam_label_to_c(index)
 
-  def compile_label({module, function, arity}), do: String.replace(String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B")
+  def compile_label({module, function, arity}), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A")
 
-  def compile_label({:extfunc, module, function, arity}), do: String.replace(String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B")
+  def compile_label({:extfunc, module, function, arity}), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A")
 
   def compile_goto({:f, 0}), do: {:expr_stmt, {:call_expr, {:symbol_expr, "abort"}, []}}
 
@@ -222,45 +224,15 @@ defmodule Ex2c do
       {:return_stmt, {:binary_expr, :=, compile_operand({:x, 0}), ccall}}], state}
   end
 
-  def compile_code(code = {:gc_bif, :-, label, _live, arguments, reg}, state = %__MODULE__{}) do
+  def compile_code(code = {:gc_bif, name, label, _live, arguments, reg}, state = %__MODULE__{}) do
     {[{:comment_stmt, Kernel.inspect(code)},
-     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_sub"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, bif_name_to_c(name)}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
       [compile_goto(label)], []}], state}
   end
 
-  def compile_code(code = {:gc_bif, :*, label, _live, arguments, reg}, state = %__MODULE__{}) do
+  def compile_code(code = {:bif, name, label, arguments, reg}, state = %__MODULE__{}) do
     {[{:comment_stmt, Kernel.inspect(code)},
-     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_mul"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
-      [compile_goto(label)], []}], state}
-  end
-
-  def compile_code(code = {:gc_bif, :+, label, _live, arguments, reg}, state = %__MODULE__{}) do
-    {[{:comment_stmt, Kernel.inspect(code)},
-     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_add"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
-      [compile_goto(label)], []}], state}
-  end
-
-  def compile_code(code = {:gc_bif, :rem, label, _live, arguments, reg}, state = %__MODULE__{}) do
-    {[{:comment_stmt, Kernel.inspect(code)},
-     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_rem"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
-      [compile_goto(label)], []}], state}
-  end
-
-  def compile_code(code = {:gc_bif, :div, label, _live, arguments, reg}, state = %__MODULE__{}) do
-    {[{:comment_stmt, Kernel.inspect(code)},
-     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_div"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
-      [compile_goto(label)], []}], state}
-  end
-
-  def compile_code(code = {:gc_bif, :length, label, _live, arguments, reg}, state = %__MODULE__{}) do
-    {[{:comment_stmt, Kernel.inspect(code)},
-     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_length"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
-      [compile_goto(label)], []}], state}
-  end
-
-  def compile_code(code = {:bif, :"=:=", label, arguments, reg}, state = %__MODULE__{}) do
-    {[{:comment_stmt, Kernel.inspect(code)},
-     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, "bif_eq_exact"}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
+     {:if_stmt, {:not_expr, {:call_expr, {:symbol_expr, bif_name_to_c(name)}, Enum.map(arguments, &Ex2c.compile_operand/1) ++ [{:address_of_expr, compile_operand(reg)}]}},
       [compile_goto(label)], []}], state}
   end
 
