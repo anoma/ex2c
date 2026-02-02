@@ -23,13 +23,15 @@ defmodule Ex2c do
 
   def beam_label_to_c(lbl), do: "L#{lbl}"
 
-  def bif_name_to_c(lbl), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace("bif_#{lbl}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A")
+  def escape_identifier(id), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(id, "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A")
+
+  def bif_name_to_c(lbl), do: escape_identifier("bif_#{lbl}")
 
   def compile_label({:f, index}), do: beam_label_to_c(index)
 
-  def compile_label({module, function, arity}), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A")
+  def compile_label({module, function, arity}), do: escape_identifier("#{module}_#{function}_#{arity}")
 
-  def compile_label({:extfunc, module, function, arity}), do: String.replace(String.replace(String.replace(String.replace(String.replace(String.replace(String.replace("#{module}_#{function}_#{arity}", "-", "2D"), ".", "2E"), "/", "2F"), "+", "2B"), "*", "2A"), "=", "3D"), ":", "3A")
+  def compile_label({:extfunc, module, function, arity}), do: escape_identifier("#{module}_#{function}_#{arity}")
 
   def compile_goto({:f, 0}), do: {:expr_stmt, {:call_expr, {:symbol_expr, "abort"}, []}}
 
