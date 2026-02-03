@@ -74,6 +74,8 @@ struct map {
 
 // Convenience functions for term construction
 
+int bit_to_byte_size(int length) { return (length + 7) / 8; }
+
 struct term make_small(int32_t value) {
   struct term t;
   t.type = SMALL;
@@ -135,7 +137,9 @@ struct term make_bitstring(uint32_t length, unsigned char *bytes) {
   struct term t;
   t.type = BITSTRING;
   t.bitstring.length = length;
-  t.bitstring.bytes = bytes;
+  int byte_size = bit_to_byte_size(length);
+  t.bitstring.bytes = (unsigned char *) malloc(byte_size);
+  memcpy(t.bitstring.bytes, bytes, byte_size);
   return t;
 }
 
@@ -205,11 +209,14 @@ struct term call_9(struct term (*fun)(), struct term x0, struct term x1, struct 
 
 // Virtual machine support functions
 
-int bit_to_byte_size(int length) {
-  return (length + 7)/8;
+int map_size(struct term t) {
+  struct map *u = t.map;
+  int i;
+  for(i = 0; u; i++, u = u->tail) {}
+  return i;
 }
 
-void display_aux(struct term *t) {
+void display_aux(const struct term *t) {
   switch(t->type) {
     case NIL:
       printf("[]");
@@ -258,7 +265,8 @@ void display_aux(struct term *t) {
       break;
   case MAP:
     printf("%%{");
-    for(int i = 0; t->map; i++, t->map = t->map->tail) {
+    const struct map *map = t->map;
+    for(int i = 0; map; i++, map = map->tail) {
       if(i) printf(", ");
       display_aux(&t->map->key);
       printf(" => ");
@@ -304,13 +312,6 @@ void get_hd(struct term t, struct term *hd) {
 }
 
 void get_tl(struct term t, struct term *tl) { *tl = *t.list.tail; }
-
-int map_size(struct term t) {
-  struct map *u = t.map;
-  int i;
-  for(i = 0; u; i++, u = u->tail) {}
-  return i;
-}
 
 int tag_index(enum term_type t) {
   switch(t) {
@@ -731,4 +732,174 @@ struct term erlang_float_to_list_1() {
 struct term erlang_atom_to_list_1() {
   printf("atom_to_list/1 not implemented");
   abort();
+}
+
+// Serialization/deserialization functions
+
+int borsh_size(const struct term *t) {
+  // Tag byte
+  int size = sizeof(uint8_t);
+  switch(t->type) {
+  case NIL: break;
+  case LIST:
+    size += borsh_size(t->list.head) + borsh_size(t->list.tail);
+    break;
+  case SMALL:
+    size += sizeof(int32_t);
+    break;
+  case ATOM:
+    size += sizeof(uint32_t) + t->atom.length;
+    break;
+  case TUPLE:
+    size += sizeof(uint32_t);
+    for(int i = 0; i < t->tuple.length; i++) {
+      size += borsh_size(&t->tuple.values[i]);
+    }
+    break;
+  case FUN:
+    printf("Functions cannot be serialized");
+    abort();
+    break;
+  case BITSTRING:
+    size += sizeof(uint32_t) + sizeof(uint32_t) + bit_to_byte_size(t->bitstring.length);
+    break;
+  case MAP:
+    size += sizeof(uint32_t);
+    for(const struct map *map = t->map; map; map = map->tail) {
+      size += borsh_size(&map->key) + borsh_size(&map->value);
+    }
+    break;
+  }
+  return size;
+}
+
+void borsh_serialize_uint32(const uint32_t value, unsigned char * const output, int *pos) {
+  output[(*pos)++] = value & 0xFF;
+  output[(*pos)++] = (value >> 8) & 0xFF;
+  output[(*pos)++] = (value >> 16) & 0xFF;
+  output[(*pos)++] = (value >> 24) & 0xFF;
+}
+
+void borsh_serialize_term(const struct term *t, unsigned char * const output, int *pos) {
+  output[(*pos)++] = (uint8_t) t->type;
+  switch(t->type) {
+  case NIL: break;
+  case LIST:
+    borsh_serialize_term(t->list.head, output, pos);
+    borsh_serialize_term(t->list.tail, output, pos);
+    break;
+  case SMALL:
+    borsh_serialize_uint32(t->small.value, output, pos);
+    break;
+  case ATOM:
+    borsh_serialize_uint32(t->atom.length, output, pos);
+    for(int i = 0; i < t->atom.length; i++) {
+      output[(*pos)++] = t->atom.value[i];
+    }
+    break;
+  case TUPLE:
+    borsh_serialize_uint32(t->tuple.length, output, pos);
+    for(int i = 0; i < t->tuple.length; i++) {
+      borsh_serialize_term(&t->tuple.values[i], output, pos);
+    }
+    break;
+  case FUN:
+    printf("Functions cannot be serialized");
+    abort();
+    break;
+  case BITSTRING:
+    borsh_serialize_uint32(t->bitstring.length, output, pos);
+    int byte_size = bit_to_byte_size(t->bitstring.length);
+    borsh_serialize_uint32(byte_size, output, pos);
+    for(int i = 0; i < byte_size; i++) {
+      output[(*pos)++] = t->bitstring.bytes[i];
+    }
+    break;
+  case MAP:
+    int size = map_size(*t);
+    borsh_serialize_uint32(size, output, pos);
+    for(struct map *map = t->map; map; map = map->tail) {
+      borsh_serialize_term(&map->key, output, pos);
+      borsh_serialize_term(&map->value, output, pos);
+    }
+    break;
+  }
+}
+
+void env_commit(const uint8_t *buffer_ptr, uintptr_t buffer_size);
+
+void env_commit_term(const struct term t) {
+  int capacity = borsh_size(&t);
+  unsigned char *bytes = (unsigned char *) malloc(capacity);
+  int pos = 0;
+  borsh_serialize_term(&t, bytes, &pos);
+  env_commit(bytes, pos);
+  free(bytes);
+}
+
+uint32_t borsh_deserialize_uint32(const unsigned char * const input, int *pos) {
+  int output = 0;
+  output += input[(*pos)++];
+  output += input[(*pos)++] << 8;
+  output += input[(*pos)++] << 16;
+  output += input[(*pos)++] << 24;
+  return output;
+}
+
+struct term borsh_deserialize_term(const unsigned char * const input, int *pos) {
+  enum term_type type = (enum term_type) input[(*pos)++];
+  switch(type) {
+  case NIL: return make_nil();
+  case LIST:
+    struct term hd = borsh_deserialize_term(input, pos);
+    struct term tl = borsh_deserialize_term(input, pos);
+    return make_list(hd, tl);
+  case SMALL:
+    return make_small(borsh_deserialize_uint32(input, pos));
+  case ATOM: {
+    int length = borsh_deserialize_uint32(input, pos);
+    char *value = (char *) malloc(length);
+    for(int i = 0; i < length; i++) {
+      value[i] = input[(*pos)++];
+    }
+    return make_atom(length, value);
+  } case TUPLE: {
+      int length = borsh_deserialize_uint32(input, pos);
+      struct term values[length];
+      for(int i = 0; i < length; i++) {
+        values[i] = borsh_deserialize_term(input, pos);
+      }
+      return make_tuple(length, values);
+    } case FUN: {
+        printf("Functions cannot be deserialized");
+        abort();
+        break;
+      } case BITSTRING: {
+          int bit_length = borsh_deserialize_uint32(input, pos);
+          int byte_length = borsh_deserialize_uint32(input, pos);
+          unsigned char bytes[byte_length];
+          for(int i = 0; i < byte_length; i++) {
+            bytes[i] = input[(*pos)++];
+          }
+          return make_bitstring(bit_length, bytes);
+        } case MAP: {
+            int length = borsh_deserialize_uint32(input, pos);
+            struct term keys[length], values[length];
+            for(int i = 0; i < length; i++) {
+              keys[i] = borsh_deserialize_term(input, pos);
+              values[i] = borsh_deserialize_term(input, pos);
+            }
+            return put_map_assoc_nofail(make_map(), keys, values, length);
+          }
+  }
+}
+
+uintptr_t env_read(uint8_t *buffer_ptr, uintptr_t buffer_size);
+
+struct term env_read_term() {
+  const int LENGTH = 256;
+  unsigned char buffer[LENGTH];
+  env_read(buffer, LENGTH);
+  int pos = 0;
+  return borsh_deserialize_term(buffer, &pos);
 }
