@@ -828,13 +828,13 @@ void borsh_serialize_term(const struct term *t, unsigned char * const output, in
 
 void env_commit(const uint8_t *buffer_ptr, uintptr_t buffer_size);
 
-void env_commit_term(const struct term t) {
-  int capacity = borsh_size(&t);
+struct term Elixir2EGuestEnv_commit_1() {
+  int capacity = borsh_size(&xs[0]);
   unsigned char *bytes = (unsigned char *) malloc(capacity);
   int pos = 0;
-  borsh_serialize_term(&t, bytes, &pos);
+  borsh_serialize_term(&xs[0], bytes, &pos);
   env_commit(bytes, pos);
-  free(bytes);
+  return make_bitstring(pos*8, bytes);
 }
 
 uint32_t borsh_deserialize_uint32(const unsigned char * const input, int *pos) {
@@ -896,7 +896,7 @@ struct term borsh_deserialize_term(const unsigned char * const input, int *pos) 
 
 uintptr_t env_read(uint8_t *buffer_ptr, uintptr_t buffer_size);
 
-struct term env_read_term() {
+struct term Elixir2EGuestEnv_read_0() {
   const int LENGTH = 256;
   unsigned char buffer[LENGTH];
   env_read(buffer, LENGTH);
